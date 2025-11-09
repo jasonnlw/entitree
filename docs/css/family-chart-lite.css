@@ -23,10 +23,13 @@ html, body { height: 100%; margin: 0; background: #fff; }
   filter: drop-shadow(var(--shadow));
 }
 
-.fcl-photo {
-  width: 200px; height: 80px;
-  object-fit: cover;
-  clip-path: inset(0 round 10px);
+.fcl-card {
+  fill: var(--card-bg);
+  stroke: #e5e7eb;
+  stroke-width: 1;
+  rx: var(--radius);
+  ry: var(--radius);
+  filter: drop-shadow(var(--shadow));
 }
 
 .fcl-name {
@@ -39,6 +42,7 @@ html, body { height: 100%; margin: 0; background: #fff; }
   fill: var(--muted);
 }
 
+.fcl-link:hover { fill: #0057b8; cursor: pointer; } /* soft blue hover */
 .fcl-link { cursor: pointer; text-decoration: underline; }
 .fcl-connector { stroke: var(--line); stroke-width: 1.5; fill: none; }
 .fcl-marriage { stroke: var(--line); stroke-width: 2; fill: none; }
