@@ -340,7 +340,18 @@ function autofit(svg, nodes, { pad = 40 } = {}) {
   const w = Math.max(800, maxX - minX);
   const h = Math.max(600, maxY - minY);
   svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
+
+  // Initial center and scale
+  const svgNode = svg.node();
+  const { width, height } = svgNode.getBoundingClientRect();
+  const scale = Math.min(width / w, height / h);
+  const tx = (width - w * scale) / 2;
+  const ty = (height - h * scale) / 2;
+  const initialTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+
+  svg.call(d3.zoom().transform, initialTransform);
 }
+
 
 // ---- D3 (required) must be available global as `d3`.
 if (typeof window !== "undefined" && !window.d3) {
