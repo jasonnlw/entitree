@@ -2,6 +2,19 @@
 // Features: bilingual labels, years (YYYY–YYYY), SNARC link (P12749), auto-center on root,
 // parents above, subject with spouses/siblings, children below, plus grandparents & grandchildren.
 // NOTE: Robust, immediate + one extra generation rendering for embedded profile pages.
+// ---- Utility helpers ----
+function dedup(arr) {
+  return [...new Set(arr.filter(Boolean))];
+}
+
+function groupBy(arr, fn) {
+  const map = Object.create(null);
+  arr.forEach(item => {
+    const key = fn(item);
+    (map[key] ||= []).push(item);
+  });
+  return map;
+}
 
 export async function drawFamilyTree(el, qid, opts = {}) {
   const langPref = (opts.lang === "cy" ? "cy,en" : "en,cy");
