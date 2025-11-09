@@ -42,6 +42,14 @@ html, body { height: 100%; margin: 0; background: #fff; }
   fill: var(--muted);
 }
 
+.fcl-svg {
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* enables pinch/drag gestures on touch devices */
+  background-color: #fff;
+}
+
+
 .fcl-link:hover { fill: #0057b8; cursor: pointer; } /* soft blue hover */
 .fcl-link { cursor: pointer; text-decoration: underline; }
 .fcl-connector { stroke: var(--line); stroke-width: 1.5; fill: none; }
