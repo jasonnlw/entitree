@@ -81,12 +81,13 @@ SELECT ?sib WHERE {
     return;
   }
   const values = allIds.map(id => `wd:${id}`).join(" ");
-  const q3 = `
-SELECT ?e ?eLabel ?dob ?dod ?snarc WHERE {
+const q3 = `
+SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   VALUES ?e { ${values} }
   OPTIONAL { ?e wdt:P569 ?dob. }
   OPTIONAL { ?e wdt:P570 ?dod. }
   OPTIONAL { ?e wdt:P12749 ?snarc. }
+  OPTIONAL { ?e wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "${langPref}". }
 }`;
   const j3 = await sparql(q3);
