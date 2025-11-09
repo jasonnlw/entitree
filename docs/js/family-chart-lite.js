@@ -247,26 +247,67 @@ function drawConnector(g, seg){
     .attr("d", seg.d);
 }
 
-function drawCard(g, n, { cardW, cardH }){
-  const grp = g.append("g").attr("transform", `translate(${n.x - cardW/2}, ${n.y - cardH/2})`);
+function drawCard(g, n, { cardW, cardH }) {
+  const grp = g.append("g")
+    .attr("transform", `translate(${n.x - cardW/2}, ${n.y - cardH/2})`);
+
+  // Draw outer card
   grp.append("rect")
-    .attr("class","fcl-card")
+    .attr("class", "fcl-card")
     .attr("width", cardW)
     .attr("height", cardH)
-    .attr("rx", 10).attr("ry", 10);
+    .attr("rx", 12).attr("ry", 12);
+
+  // If image exists, render thumbnail from Commons
+  if (n.image) {
+    grp.append("image")
+      .attr("href", commonsThumb(n.image, 200))
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", cardW)
+      .attr("height", 80)
+      .attr("preserveAspectRatio", "xMidYMid slice");
+  }
+
+  // Text placement depends on image presence
+  const textYBase = n.image ? 95 : 28;
 
   const name = grp.append("text")
-    .attr("class","fcl-name")
-    .attr("x", 12).attr("y", 20)
+    .attr("class", "fcl-name")
+    .attr("x", 12)
+    .attr("y", textYBase)
     .text(n.name);
 
-  // Years: only when both exist (already computed), else empty
   if (n.yrs) {
     grp.append("text")
-      .attr("class","fcl-years")
-      .attr("x", 12).attr("y", 38)
+      .attr("class", "fcl-years")
+      .attr("x", 12)
+      .attr("y", textYBase + 16)
       .text(n.yrs);
   }
+
+  // Link click: navigate to SNARC
+  if (n.snarc) {
+    name.attr("class", "fcl-name fcl-link")
+      .style("text-decoration", "underline")
+      .on("click", () => {
+        const url = `https://jasonnlw.github.io/SNARC-explorer/#/item/${n.snarc}`;
+        window.top.location.href = url;
+      });
+  }
+}
+
+// Build a Wikimedia Commons thumbnail URL (like Entitree)
+function commonsThumb(url, width = 200) {
+  if (!url) return "";
+  // convert full URL to IIIF-style thumbnail path
+  // Example: https://commons.wikimedia.org/wiki/Special:FilePath/Filename.jpg
+  // -> https://commons.wikimedia.org/wiki/Special:FilePath/Filename.jpg?width=200
+  if (url.includes("FilePath/")) return `${url}?width=${width}`;
+  // Or if direct upload.wikimedia.org URL
+  return url.replace(/\/(\d{1,3})px-.+/, `/${width}px-$1`);
+}
+
 
   // Link click: navigate parent (outside iframe) if SNARC id exists
   if (n.snarc) {
