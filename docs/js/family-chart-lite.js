@@ -252,7 +252,7 @@ function drawConnector(g, seg){
 
 function drawCard(g, n, { cardW, cardH }) {
   const grp = g.append("g")
-    .attr("transform", `translate(${n.x - cardW/2}, ${n.y - cardH/2})`);
+    .attr("transform", `translate(${n.x - cardW / 2}, ${n.y - cardH / 2})`);
 
   // Draw outer card
   grp.append("rect")
@@ -262,35 +262,38 @@ function drawCard(g, n, { cardW, cardH }) {
     .attr("rx", 12)
     .attr("ry", 12);
 
-  // If image exists, render thumbnail from Commons
+  // Image area (square, cropped centre)
+  const imgSize = 60;
   if (n.image) {
     grp.append("image")
-      .attr("href", commonsThumb(n.image, 200))
-      .attr("x", 0)
-      .attr("y", 0)
-      .attr("width", cardW)
-      .attr("height", 80)
-      .attr("preserveAspectRatio", "xMidYMid slice");
+      .attr("href", commonsThumb(n.image, 120))
+      .attr("x", 10)
+      .attr("y", (cardH - imgSize) / 2)
+      .attr("width", imgSize)
+      .attr("height", imgSize)
+      .attr("preserveAspectRatio", "xMidYMid slice")
+      .attr("clip-path", "inset(0 round 8px)");
   }
 
-  // Text placement depends on image presence
-  const textYBase = n.image ? 95 : 28;
+  // Text block to the right of image
+  const textX = n.image ? 10 + imgSize + 12 : 14;
+  const textY = cardH / 2 - 6;
 
   const name = grp.append("text")
     .attr("class", "fcl-name")
-    .attr("x", 12)
-    .attr("y", textYBase)
+    .attr("x", textX)
+    .attr("y", textY)
     .text(n.name);
 
   if (n.yrs) {
     grp.append("text")
       .attr("class", "fcl-years")
-      .attr("x", 12)
-      .attr("y", textYBase + 16)
+      .attr("x", textX)
+      .attr("y", textY + 18)
       .text(n.yrs);
   }
 
-  // Link click: navigate to SNARC
+  // Clickable link (SNARC)
   if (n.snarc) {
     name.attr("class", "fcl-name fcl-link")
       .style("text-decoration", "underline")
@@ -300,7 +303,6 @@ function drawCard(g, n, { cardW, cardH }) {
       });
   }
 }
-
 function commonsThumb(url, width = 200) {
   if (!url) return "";
   // Try to construct a proper thumbnail URL from Commons file paths
