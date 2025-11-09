@@ -207,27 +207,113 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   // ------ 6) Build connectors ------
   const connectors = [];
 
-  // Marriage lines: subject to each spouse
+  // --- Marriage connectors (subject <-> spouses) ---
+  const marriageJunctions = []; // store midpoints for child connectors
   spouseIds.forEach(sp => {
     const a = nodes.find(n => n.id === subjId);
     const b = nodes.find(n => n.id === sp);
-    if (a && b) connectors.push(lineSegment(midBottom(a), midBottom(b), "marriage"));
+    if (a && b) {
+      const midX = (a.x + b.x) / 2;
+      const y = Math.max(a.y, b.y) + 35; // just below cards
+      connectors.push({
+        kind: "marriage",
+        d: `M ${a.x} ${a.y + 40} H ${b.x}`
+      });
+      marriageJunctions.push({ x: midX, y });
+    }
   });
 
-  // Parent→child: from father if present else mother; for subject's children only (descendant lines)
-  childIds.forEach(cid => {
-    const child = nodes.find(n => n.id === cid);
-    if (!child) return;
-    const fromId = fatherId || motherId || subjId; // fallback: subject if no parent known
-    const parent = nodes.find(n => n.id === fromId);
-    if (parent) connectors.push(elbow(parent, child));
-  });
+  // --- Parent → Child connectors ---
+  // Work from both parents where possible
+  const knownParents = parentIds.map(pid => nodes.find(n => n.id === pid)).filter(Boolean);
+  const knownChildren = childIds.map(cid => nodes.find(n => n.id === cid)).filter(Boolean);
 
-  // Sibling bar if no parents
+  if (knownChildren.length && knownParents.length) {
+    // if both parents known
+    if (knownParents.length === 2) {
+      const [p1, p2] = knownParents;
+      const unionY = Math.max(p1.y, p2.y) + 45;
+      const unionLeftX = Math.min(p1.x, p2.x);
+      const unionRightX = Math.max(p1.x, p2.x);
+
+      // Connect parents downward and draw union bar
+      connectors.push({
+        kind: "union",
+        d: `M ${p1.x} ${p1.y + 50} V ${unionY} 
+            M ${p2.x} ${p2.y + 50} V ${unionY} 
+            M ${unionLeftX} ${unionY} H ${unionRightX}`
+      });
+
+      // Connect children from midpoint of that union bar
+      const midX = (unionLeftX + unionRightX) / 2;
+      knownChildren.forEach(ch => {
+        connectors.push({
+          kind: "child",
+          d: `M ${midX} ${unionY} V ${ch.y - 50} H ${ch.x} V ${ch.y - 32}`
+        });
+      });
+
+    } else {
+      // Single parent
+      const p = knownParents[0];
+      knownChildren.forEach(ch => {
+        connectors.push({
+          kind: "child",
+          d: `M ${p.x} ${p.y + 50} V ${ch.y - 32}`
+        });
+      });
+    }
+  } else if (knownChildren.length) {
+    // Fallback: children of subject (no parents)
+    const parentNode = nodes.find(n => n.id === subjId);
+    if (parentNode) {
+      knownChildren.forEach(ch => {
+        connectors.push({
+          kind: "child",
+          d: `M ${parentNode.x} ${parentNode.y + 50} V ${ch.y - 32}`
+        });
+      });
+    }
+  }
+
+  // --- Sibling bar if no parents (and multiple siblings) ---
   if (!parentIds.length && siblingIds.length > 1) {
     const sibs = siblingIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
     const left = sibs[0], right = sibs[sibs.length - 1];
-    if (left && right) connectors.push(horizontal(midTop(left), midTop(right)));
+    if (left && right) {
+      connectors.push({
+        kind: "sibling",
+        d: `M ${left.x - 60} ${left.y - 50} H ${right.x + 60}`
+      });
+    }
+  }
+
+  // --- Grandparent → Parent connectors ---
+  const knownGrandparents = grandparentIds.map(gid => nodes.find(n => n.id === gid)).filter(Boolean);
+  if (knownGrandparents.length && knownParents.length) {
+    knownParents.forEach(pr => {
+      // find matching lineage if any grandparents present
+      knownGrandparents.forEach(gp => {
+        connectors.push({
+          kind: "ancestor",
+          d: `M ${gp.x} ${gp.y + 50} V ${(gp.y + pr.y) / 2} H ${pr.x} V ${pr.y - 50}`
+        });
+      });
+    });
+  }
+
+  // --- Parent → Grandchild (if intermediate parent missing) ---
+  const knownGrandchildren = grandchildIds.map(gid => nodes.find(n => n.id === gid)).filter(Boolean);
+  if (knownGrandchildren.length && !knownChildren.length) {
+    const p = nodes.find(n => n.id === subjId);
+    if (p) {
+      knownGrandchildren.forEach(gc => {
+        connectors.push({
+          kind: "descendant",
+          d: `M ${p.x} ${p.y + 50} V ${gc.y - 32}`
+        });
+      });
+    }
   }
 
   // ------ 7) Mount SVG and draw ------
@@ -237,67 +323,38 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   autofit(svg, nodes, { pad: 60 });
 }
 
-/* ================== Utilities ================== */
+/* ================== Updated drawConnector ================== */
 
-function dedup(arr) { return [...new Set(arr)]; }
-function groupBy(arr, fn) {
-  const m = Object.create(null);
-  arr.forEach(x => {
-    const k = fn(x);
-    (m[k] || (m[k] = [])).push(x);
-  });
-  return m;
-}
-
-function mountEmpty(el, msg) {
-  el.innerHTML = `<div style="padding:1rem;color:#555">${msg}</div>`;
-}
-
-function mountSvg(el) {
-  el.innerHTML = "";
-
-  const svg = d3.select(el)
-    .append("svg")
-    .attr("class", "fcl-svg")
-    .attr("viewBox", `0 0 1200 1000`)
-    .attr("preserveAspectRatio", "xMidYMid meet")
-    .style("cursor", "grab");
-
-  const g = svg.append("g");
-
-  // Zoom/pan
-  const zoomed = (event) => {
-    g.attr("transform", event.transform);
+function drawConnector(g, seg) {
+  const colorMap = {
+    marriage: "#333",
+    union: "#444",
+    child: "#444",
+    ancestor: "#444",
+    descendant: "#444",
+    sibling: "#666"
   };
-  const zoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", zoomed);
-  svg.call(zoom);
-
-  svg.on("mousedown touchstart", () => svg.style("cursor", "grabbing"));
-  svg.on("mouseup touchend", () => svg.style("cursor", "grab"));
-
-  return { svg, g };
-}
-
-function midTop(n)    { return { x: n.x, y: n.y - 32 }; }
-function midBottom(n) { return { x: n.x, y: n.y + 32 }; }
-
-function elbow(from, to) {
-  const midY = (from.y + to.y) / 2;
-  return {
-    kind: "elbow",
-    d: `M ${from.x} ${from.y + 32}
-        V ${midY}
-        H ${to.x}
-        V ${to.y - 32}`
+  const widthMap = {
+    marriage: 2.5,
+    union: 2.2,
+    child: 2.2,
+    ancestor: 2.2,
+    descendant: 2.2,
+    sibling: 2
   };
-}
+  const dashMap = {
+    sibling: "4 2"
+  };
 
-function horizontal(a, b) {
-  return { kind: "marriage", d: `M ${a.x} ${a.y - 10} H ${b.x}` };
-}
+  const path = g.append("path")
+    .attr("d", seg.d)
+    .attr("stroke", colorMap[seg.kind] || "#444")
+    .attr("stroke-width", widthMap[seg.kind] || 2)
+    .attr("fill", "none")
+    .attr("stroke-linecap", "round")
+    .attr("stroke-linejoin", "round");
 
-function lineSegment(a, b, kind = "marriage") {
-  return { kind, d: `M ${a.x} ${a.y + 10} L ${b.x} ${b.y + 10}` };
+  if (dashMap[seg.kind]) path.attr("stroke-dasharray", dashMap[seg.kind]);
 }
 
 function drawConnector(g, seg) {
