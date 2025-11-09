@@ -134,7 +134,7 @@ j3.results.bindings.forEach(b => {
 
   // ------ 5) Compute coordinates ------
   // Simple vertical layout with equal row heights and card width.
-  const rowH = 140, colW = 200, gapX = 18;
+  const rowH = 180, colW = 260, gapX = 30;
   // Normalize columns: sort by lane then order
   const lanes = groupBy(nodes, n => n.lane);
   Object.keys(lanes).forEach(k => lanes[k].sort((a,b)=>a.order-b.order));
@@ -151,7 +151,7 @@ j3.results.bindings.forEach(b => {
   const centerXi = subjectNode ? subjectNode.xi : 0;
 
   // Compute absolute pixel coords (subject centered)
-  const cardW = 220, cardH = 120;
+  const cardW = 220, cardH = 100;
   const laneY = (lane) => (lane + 1) * rowH; // parents at ~rowH, center at ~2*rowH, children at ~3*rowH
 
   // Determine center offset so subject is visually centered
