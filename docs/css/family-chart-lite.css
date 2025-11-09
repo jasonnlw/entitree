@@ -49,7 +49,7 @@ html, body { height: 100%; margin: 0; background: #fff; }
   background-color: #fff;
 }
 
-
+.fcl-connector { stroke-width: 1.2; }
 .fcl-link:hover { fill: #0057b8; cursor: pointer; } /* soft blue hover */
 .fcl-link { cursor: pointer; text-decoration: underline; }
 .fcl-connector { stroke: var(--line); stroke-width: 1.5; fill: none; }
