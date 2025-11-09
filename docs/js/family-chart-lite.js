@@ -215,15 +215,36 @@ function mountEmpty(el, msg){
   el.innerHTML = `<div style="padding:1rem;color:#555">${msg}</div>`;
 }
 
-function mountSvg(el){
+function mountSvg(el) {
   el.innerHTML = "";
-  const svg = d3.select(el).append("svg")
-    .attr("class","fcl-svg")
+
+  const svg = d3.select(el)
+    .append("svg")
+    .attr("class", "fcl-svg")
     .attr("viewBox", `0 0 1200 800`)
-    .attr("preserveAspectRatio","xMidYMid meet");
+    .attr("preserveAspectRatio", "xMidYMid meet")
+    .style("cursor", "grab");
+
   const g = svg.append("g");
+
+  // --- Enable zoom/pan ---
+  const zoomed = (event) => {
+    g.attr("transform", event.transform);
+  };
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.3, 3])   // min / max zoom factors
+    .on("zoom", zoomed);
+
+  svg.call(zoom);
+
+  // Optional: change cursor on drag
+  svg.on("mousedown touchstart", () => svg.style("cursor", "grabbing"));
+  svg.on("mouseup touchend", () => svg.style("cursor", "grab"));
+
   return { svg, g };
 }
+
 
 function midTop(n){ return { x:n.x, y:n.y - 32 }; }
 function midBottom(n){ return { x:n.x, y:n.y + 32 }; }
