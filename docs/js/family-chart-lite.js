@@ -301,7 +301,6 @@ function drawCard(g, n, { cardW, cardH }) {
   }
 }
 
-// Build a Wikimedia Commons thumbnail URL (like Entitree)
 function commonsThumb(url, width = 200) {
   if (!url) return "";
   // Try to construct a proper thumbnail URL from Commons file paths
@@ -309,24 +308,14 @@ function commonsThumb(url, width = 200) {
   if (url.includes("upload.wikimedia.org")) return url; // already direct
   return url;
 }
-  // Link click: navigate parent (outside iframe) if SNARC id exists
-  if (n.snarc) {
-    name.attr("class","fcl-name fcl-link")
-      .style("text-decoration","underline")
-      .on("click", () => {
-        const url = `https://jasonnlw.github.io/SNARC-explorer/#/item/${n.snarc}`;
-        window.top.location.href = url;
-      });
-  }
-}
 
-function autofit(svg, nodes, { pad=40 }={}){
+function autofit(svg, nodes, { pad = 40 } = {}) {
   if (!nodes.length) return;
-  const xs = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
-  const minX = Math.min(...xs)-pad, maxX = Math.max(...xs)+pad;
-  const minY = Math.min(...ys)-pad, maxY = Math.max(...ys)+pad;
-  const w = Math.max(800, maxX-minX);
-  const h = Math.max(600, maxY-minY);
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+  const w = Math.max(800, maxX - minX);
+  const h = Math.max(600, maxY - minY);
   svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
 }
 
