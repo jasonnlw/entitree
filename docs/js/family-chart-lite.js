@@ -271,7 +271,7 @@ function drawCard(g, n, { cardW, cardH }) {
       .attr("y", (cardH - imgSize) / 2)
       .attr("width", imgSize)
       .attr("height", imgSize)
-      .attr("preserveAspectRatio", "xMidYMid slice")
+      .attr("preserveAspectRatio", "xMidYTop slice")
       .attr("clip-path", "inset(0 round 8px)");
   }
 
