@@ -92,17 +92,17 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
 }`;
   const j3 = await sparql(q3);
   const meta = Object.create(null);
-  j3.results.bindings.forEach(b => {
-    const id = qidFromIRI(b.e.value);
-    meta[id] = {
-      id,
-      label: b.eLabel?.value || id,
-      dob: b.dob?.value || null,
-      dod: b.dod?.value || null,
-      snarc: b.snarc?.value || null,
-      image: b.image?.value || null
-    };
-  });
+j3.results.bindings.forEach(b => {
+  const id = qidFromIRI(b.e.value);
+  meta[id] = {
+    id,
+    label: b.eLabel?.value || id,
+    dob: b.dob?.value || null,
+    dod: b.dod?.value || null,
+    snarc: b.snarc?.value || null,
+    image: b.image?.value || null
+  };
+});
 
   // ------ 4) Build nodes with layout lanes (vertical) ------
   // Lanes (rows): -1 = parents, 0 = subject / spouses / siblings, +1 = children
@@ -110,7 +110,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   const nodes = [];
   const addNode = (id, lane, sideOrder) => {
     const m = meta[id] || { id, label:id };
-   nodes.push({
+ nodes.push({
   id,
   lane,
   order: sideOrder,
@@ -118,7 +118,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   yrs: years(m.dob, m.dod),
   snarc: m.snarc || null,
   image: m.image || null
-    });
+});
   };
 
   // parents
@@ -259,7 +259,8 @@ function drawCard(g, n, { cardW, cardH }) {
     .attr("class", "fcl-card")
     .attr("width", cardW)
     .attr("height", cardH)
-    .attr("rx", 12).attr("ry", 12);
+    .attr("rx", 12)
+    .attr("ry", 12);
 
   // If image exists, render thumbnail from Commons
   if (n.image) {
@@ -303,15 +304,11 @@ function drawCard(g, n, { cardW, cardH }) {
 // Build a Wikimedia Commons thumbnail URL (like Entitree)
 function commonsThumb(url, width = 200) {
   if (!url) return "";
-  // convert full URL to IIIF-style thumbnail path
-  // Example: https://commons.wikimedia.org/wiki/Special:FilePath/Filename.jpg
-  // -> https://commons.wikimedia.org/wiki/Special:FilePath/Filename.jpg?width=200
-  if (url.includes("FilePath/")) return `${url}?width=${width}`;
-  // Or if direct upload.wikimedia.org URL
-  return url.replace(/\/(\d{1,3})px-.+/, `/${width}px-$1`);
+  // Try to construct a proper thumbnail URL from Commons file paths
+  if (url.includes("Special:FilePath")) return `${url}?width=${width}`;
+  if (url.includes("upload.wikimedia.org")) return url; // already direct
+  return url;
 }
-
-
   // Link click: navigate parent (outside iframe) if SNARC id exists
   if (n.snarc) {
     name.attr("class","fcl-name fcl-link")
