@@ -263,7 +263,7 @@ function drawCard(g, n, { cardW, cardH }) {
     .attr("ry", 12);
 
   // Image area (square, cropped centre)
-  const imgSize = 60;
+  const imgSize = 80;
   if (n.image) {
     grp.append("image")
       .attr("href", commonsThumb(n.image, 120))
