@@ -357,11 +357,6 @@ function drawConnector(g, seg) {
   if (dashMap[seg.kind]) path.attr("stroke-dasharray", dashMap[seg.kind]);
 }
 
-function drawConnector(g, seg) {
-  g.append("path")
-    .attr("class", seg.kind === "marriage" ? "fcl-marriage" : "fcl-connector")
-    .attr("d", seg.d);
-}
 
 function drawCard(g, n, { cardW, cardH }) {
   const grp = g.append("g")
