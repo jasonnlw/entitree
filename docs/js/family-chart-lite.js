@@ -1,7 +1,7 @@
 // Family Chart Lite (vertical layout, CSP-safe, no external deps except local d3)
 // Features: bilingual labels, years (YYYY–YYYY), SNARC link (P12749), auto-center on root,
-// parents above, subject with spouses / siblings, children below, grandparents & grandchildren.
-// NOTE: Robust, immediate family rendering suitable for embedded profile pages.
+// parents above, subject with spouses/siblings, children below, plus grandparents & grandchildren.
+// NOTE: Robust, immediate + one extra generation rendering for embedded profile pages.
 
 export async function drawFamilyTree(el, qid, opts = {}) {
   const langPref = (opts.lang === "cy" ? "cy,en" : "en,cy");
@@ -10,12 +10,12 @@ export async function drawFamilyTree(el, qid, opts = {}) {
   // ------ Helpers ------
   const sparql = async (q) => {
     const url = `${endpoint}?query=${encodeURIComponent(q)}&format=json`;
-    const res = await fetch(url, { headers: { "Accept": "application/sparql-results+json" }});
+    const res = await fetch(url, { headers: { "Accept": "application/sparql-results+json" } });
     if (!res.ok) throw new Error(`SPARQL ${res.status}`);
     return res.json();
   };
-  const y4 = (iso) => (iso && /^\d{4}/.test(iso)) ? iso.slice(0,4) : null;
-  const years = (b,d) => {
+  const y4 = (iso) => (iso && /^\d{4}/.test(iso)) ? iso.slice(0, 4) : null;
+  const years = (b, d) => {
     const B = y4(b), D = y4(d);
     return (B && D) ? `(${B}–${D})` : "";
   };
@@ -24,28 +24,29 @@ export async function drawFamilyTree(el, qid, opts = {}) {
     return m ? m[1] : iri;
   };
 
-  // ------ 1) Fetch core relations for subject ------
+  // ------ 1) Fetch relations OUTWARD from the subject ------
+  // Direct and one-step extended only:
+  // - Spouses (P26)
+  // - Children (P40), and grandchildren via child->P40
+  // - Father (P22) and mother (P25)
+  // - Grandparents via parents' parents (ff, fm, mf, mm)
   const subjectQid = qid;
   const q1 = `
-SELECT ?person ?parent ?child ?spouse ?grandparent ?grandchild WHERE {
+SELECT ?person ?spouse ?child ?father ?mother ?ff ?fm ?mf ?mm ?grandchild WHERE {
   VALUES ?person { wd:${subjectQid} }
 
-  # Direct family
   OPTIONAL { ?person wdt:P26 ?spouse. }
   OPTIONAL { ?person wdt:P40 ?child. }
-  OPTIONAL { ?parent wdt:P40 ?person. }
 
-  # One generation up (grandparents)
-  OPTIONAL {
-    ?parent wdt:P40 ?person.
-    ?grandparent wdt:P40 ?parent.
-  }
+  OPTIONAL { ?person wdt:P22 ?father. }
+  OPTIONAL { ?person wdt:P25 ?mother. }
 
-  # One generation down (grandchildren)
-  OPTIONAL {
-    ?person wdt:P40 ?child.
-    ?child wdt:P40 ?grandchild.
-  }
+  OPTIONAL { ?father wdt:P22 ?ff. }  # father's father
+  OPTIONAL { ?father wdt:P25 ?fm. }  # father's mother
+  OPTIONAL { ?mother wdt:P22 ?mf. }  # mother's father
+  OPTIONAL { ?mother wdt:P25 ?mm. }  # mother's mother
+
+  OPTIONAL { ?child  wdt:P40 ?grandchild. }
 }`;
 
   const j1 = await sparql(q1);
@@ -54,33 +55,46 @@ SELECT ?person ?parent ?child ?spouse ?grandparent ?grandchild WHERE {
     return;
   }
 
-  const subjRow = j1.results.bindings[0];
-  const subjId = qidFromIRI(subjRow.person.value);
-  const subj = {
-    id: subjId,
-    label: subjRow.personLabel?.value || subjId,
-    dob: subjRow.dob?.value || null,
-    dod: subjRow.dod?.value || null,
-    snarc: subjRow.snarc?.value || null
-  };
+  // Extract IDs along the intended edges only
+  const subjId = qidFromIRI(j1.results.bindings[0].person.value);
 
-  const spouseIds = dedup(j1.results.bindings.filter(b => b.spouse).map(b => qidFromIRI(b.spouse.value)));
-  const childIds = dedup(j1.results.bindings.filter(b => b.child).map(b => qidFromIRI(b.child.value)));
-  const fatherId = subjRow.father ? qidFromIRI(subjRow.father.value) : null;
-  const motherId = subjRow.mother ? qidFromIRI(subjRow.mother.value) : null;
+  const spouseIds = dedup(j1.results.bindings
+    .filter(b => b.spouse)
+    .map(b => qidFromIRI(b.spouse.value)));
+
+  const childIds = dedup(j1.results.bindings
+    .filter(b => b.child)
+    .map(b => qidFromIRI(b.child.value)));
+
+  // Parents taken only from P22/P25 on the subject
+  const fatherId = j1.results.bindings
+    .map(b => b.father ? qidFromIRI(b.father.value) : null)
+    .filter(Boolean)[0] || null;
+
+  const motherId = j1.results.bindings
+    .map(b => b.mother ? qidFromIRI(b.mother.value) : null)
+    .filter(Boolean)[0] || null;
+
   const parentIds = dedup([fatherId, motherId].filter(Boolean));
 
-  // New: grandparents & grandchildren
-  const grandparentIds = dedup(j1.results.bindings
-    .filter(b => b.grandparent)
-    .map(b => qidFromIRI(b.grandparent.value))
-  );
-  const grandchildIds = dedup(j1.results.bindings
-    .filter(b => b.grandchild)
-    .map(b => qidFromIRI(b.grandchild.value))
+  // Grandparents from parents' parents only (no inverses)
+  const grandparentIds = dedup(
+    j1.results.bindings.flatMap(b => {
+      const ids = [];
+      if (b.ff) ids.push(qidFromIRI(b.ff.value));
+      if (b.fm) ids.push(qidFromIRI(b.fm.value));
+      if (b.mf) ids.push(qidFromIRI(b.mf.value));
+      if (b.mm) ids.push(qidFromIRI(b.mm.value));
+      return ids;
+    })
   );
 
-  // ------ 2) Fetch siblings by parents ------
+  // Grandchildren from children->P40 only
+  const grandchildIds = dedup(j1.results.bindings
+    .filter(b => b.grandchild)
+    .map(b => qidFromIRI(b.grandchild.value)));
+
+  // ------ 2) Siblings determined from parents (children of P22/P25 minus subject) ------
   let siblingIds = [];
   if (parentIds.length) {
     const parentValues = parentIds.map(id => `wd:${id}`).join(" ");
@@ -121,6 +135,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "${langPref}". }
 }`;
   const j3 = await sparql(q3);
+
   const meta = Object.create(null);
   j3.results.bindings.forEach(b => {
     const id = qidFromIRI(b.e.value);
@@ -135,6 +150,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   });
 
   // ------ 4) Build nodes with layout lanes (vertical) ------
+  // Lanes: -2 grandparents, -1 parents, 0 center (spouses left, subject, siblings right), +1 children, +2 grandchildren
   const nodes = [];
   const addNode = (id, lane, sideOrder) => {
     const m = meta[id] || { id, label: id };
@@ -156,9 +172,9 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   parentIds.forEach((id, i) => addNode(id, -1, i));
 
   // center row
-  spouseIds.forEach((id, i) => addNode(id, 0, -(i + 1)));
-  addNode(subjId, 0, 0);
-  siblingIds.forEach((id, i) => addNode(id, 0, +(i + 1)));
+  spouseIds.forEach((id, i) => addNode(id, 0, -(i + 1))); // left of subject
+  addNode(subjId, 0, 0);                                   // subject center
+  siblingIds.forEach((id, i) => addNode(id, 0, +(i + 1))); // right of subject
 
   // children (lane +1)
   childIds.forEach((id, i) => addNode(id, +1, i));
@@ -171,16 +187,15 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   const lanes = groupBy(nodes, n => n.lane);
   Object.keys(lanes).forEach(k => lanes[k].sort((a, b) => a.order - b.order));
 
-  const laneWidths = {};
   Object.keys(lanes).forEach(k => {
-    laneWidths[k] = lanes[k].length;
     lanes[k].forEach((n, idx) => (n.xi = idx));
   });
 
   const subjectNode = nodes.find(n => n.id === subjId);
   const centerXi = subjectNode ? subjectNode.xi : 0;
+
   const cardW = 220, cardH = 100;
-  const laneY = (lane) => (lane + 2) * rowH;
+  const laneY = (lane) => (lane + 2) * rowH; // shift so top lane is visible
   const centerX = 600;
 
   nodes.forEach(n => {
@@ -191,20 +206,24 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
 
   // ------ 6) Build connectors ------
   const connectors = [];
+
+  // Marriage lines: subject to each spouse
   spouseIds.forEach(sp => {
-    const a = nodes.find(n => n.id === subjId),
-          b = nodes.find(n => n.id === sp);
+    const a = nodes.find(n => n.id === subjId);
+    const b = nodes.find(n => n.id === sp);
     if (a && b) connectors.push(lineSegment(midBottom(a), midBottom(b), "marriage"));
   });
 
+  // Parent→child: from father if present else mother; for subject's children only (descendant lines)
   childIds.forEach(cid => {
     const child = nodes.find(n => n.id === cid);
     if (!child) return;
-    const fromId = fatherId || motherId || subjId;
+    const fromId = fatherId || motherId || subjId; // fallback: subject if no parent known
     const parent = nodes.find(n => n.id === fromId);
     if (parent) connectors.push(elbow(parent, child));
   });
 
+  // Sibling bar if no parents
   if (!parentIds.length && siblingIds.length > 1) {
     const sibs = siblingIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
     const left = sibs[0], right = sibs[sibs.length - 1];
@@ -236,23 +255,30 @@ function mountEmpty(el, msg) {
 
 function mountSvg(el) {
   el.innerHTML = "";
+
   const svg = d3.select(el)
     .append("svg")
     .attr("class", "fcl-svg")
     .attr("viewBox", `0 0 1200 1000`)
     .attr("preserveAspectRatio", "xMidYMid meet")
     .style("cursor", "grab");
+
   const g = svg.append("g");
 
-  const zoomed = (event) => g.attr("transform", event.transform);
+  // Zoom/pan
+  const zoomed = (event) => {
+    g.attr("transform", event.transform);
+  };
   const zoom = d3.zoom().scaleExtent([0.3, 3]).on("zoom", zoomed);
   svg.call(zoom);
+
   svg.on("mousedown touchstart", () => svg.style("cursor", "grabbing"));
   svg.on("mouseup touchend", () => svg.style("cursor", "grab"));
+
   return { svg, g };
 }
 
-function midTop(n) { return { x: n.x, y: n.y - 32 }; }
+function midTop(n)    { return { x: n.x, y: n.y - 32 }; }
 function midBottom(n) { return { x: n.x, y: n.y + 32 }; }
 
 function elbow(from, to) {
@@ -265,9 +291,11 @@ function elbow(from, to) {
         V ${to.y - 32}`
   };
 }
+
 function horizontal(a, b) {
   return { kind: "marriage", d: `M ${a.x} ${a.y - 10} H ${b.x}` };
 }
+
 function lineSegment(a, b, kind = "marriage") {
   return { kind, d: `M ${a.x} ${a.y + 10} L ${b.x} ${b.y + 10}` };
 }
@@ -282,6 +310,7 @@ function drawCard(g, n, { cardW, cardH }) {
   const grp = g.append("g")
     .attr("transform", `translate(${n.x - cardW / 2}, ${n.y - cardH / 2})`);
 
+  // Card
   grp.append("rect")
     .attr("class", "fcl-card")
     .attr("width", cardW)
@@ -289,6 +318,7 @@ function drawCard(g, n, { cardW, cardH }) {
     .attr("rx", 12)
     .attr("ry", 12);
 
+  // Left square image (cropped center)
   const imgSize = 80;
   if (n.image) {
     grp.append("image")
@@ -301,6 +331,7 @@ function drawCard(g, n, { cardW, cardH }) {
       .attr("clip-path", "inset(0 round 8px)");
   }
 
+  // Text block to the right
   const textX = n.image ? 10 + imgSize + 12 : 14;
   const textY = cardH / 2 - 6;
 
@@ -318,6 +349,7 @@ function drawCard(g, n, { cardW, cardH }) {
       .text(n.yrs);
   }
 
+  // Clickable link to SNARC
   if (n.snarc) {
     name.attr("class", "fcl-name fcl-link")
       .style("text-decoration", "underline")
@@ -328,10 +360,11 @@ function drawCard(g, n, { cardW, cardH }) {
   }
 }
 
+// Build a Wikimedia Commons thumbnail URL (best-effort)
 function commonsThumb(url, width = 200) {
   if (!url) return "";
   if (url.includes("Special:FilePath")) return `${url}?width=${width}`;
-  if (url.includes("upload.wikimedia.org")) return url;
+  if (url.includes("upload.wikimedia.org")) return url; // direct thumbnail URLs often already sized
   return url;
 }
 
