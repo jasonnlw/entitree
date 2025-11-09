@@ -99,7 +99,8 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
       label: b.eLabel?.value || id,
       dob: b.dob?.value || null,
       dod: b.dod?.value || null,
-      snarc: b.snarc?.value || null
+      snarc: b.snarc?.value || null,
+      image: b.image?.value || null
     };
   });
 
@@ -109,13 +110,14 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   const nodes = [];
   const addNode = (id, lane, sideOrder) => {
     const m = meta[id] || { id, label:id };
-    nodes.push({
-      id,
-      lane,
-      order: sideOrder,
-      name: m.label,
-      yrs: years(m.dob, m.dod),
-      snarc: m.snarc || null
+   nodes.push({
+  id,
+  lane,
+  order: sideOrder,
+  name: m.label,
+  yrs: years(m.dob, m.dod),
+  snarc: m.snarc || null,
+  image: m.image || null
     });
   };
 
@@ -149,7 +151,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   const centerXi = subjectNode ? subjectNode.xi : 0;
 
   // Compute absolute pixel coords (subject centered)
-  const cardW = 180, cardH = 64;
+  const cardW = 220, cardH = 120;
   const laneY = (lane) => (lane + 1) * rowH; // parents at ~rowH, center at ~2*rowH, children at ~3*rowH
 
   // Determine center offset so subject is visually centered
