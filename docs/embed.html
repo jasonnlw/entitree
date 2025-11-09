@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SNARC Family Tree</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/family-chart@3/dist/styles/family-chart.css">
+  <style>
+    body { margin:0; background:#fff; }
+    #tree { width:100%; height:100vh; }
+  </style>
+</head>
+<body>
+  <div id="tree"></div>
+
+  <script type="module">
+    import * as f3 from "https://esm.sh/family-chart@3";
+
+    const params = new URLSearchParams(window.location.search);
+    const qid = params.get("item");
+    const lang = params.get("lang") === "cy" ? "cy,en" : "en,cy";
+
+    async function load() {
+      if (!qid) return;
+
+      const endpoint = "https://query.wikidata.org/sparql";
+      const query = `
+        SELECT ?person ?personLabel ?image ?dob ?dod ?gender ?spouse ?child ?snarc
+        WHERE {
+          VALUES ?person { wd:${qid} }
+          OPTIONAL { ?person wdt:P18 ?image. }
+          OPTIONAL { ?person wdt:P569 ?dob. }
+          OPTIONAL { ?person wdt:P570 ?dod. }
+          OPTIONAL { ?person wdt:P21 ?gender. }
+          OPTIONAL { ?person wdt:P26 ?spouse. }
+          OPTIONAL { ?person wdt:P40 ?child. }
+          OPTIONAL { ?person wdt:P12749 ?snarc. }
+          SERVICE wikibase:label { bd:serviceParam wikibase:language "${lang}". }
+        }`;
+
+      const url = `${endpoint}?query=${encodeURIComponent(query)}&format=json`;
+      const res = await fetch(url);
+      const json = await res.json();
+
+      const data = json.results.bindings.map(b => ({
+        id: b.person.value,
+        name: b.personLabel?.value || "Unknown",
+        image: b.image?.value,
+        birth: b.dob?.value,
+        death: b.dod?.value,
+        snarc: b.snarc?.value
+      }));
+
+      // Basic node structure for f3
+      const nodes = data.map(d => ({
+        id: d.id,
+        name: d.name,
+        link: d.snarc
+          ? `https://jasonnlw.github.io/SNARC-explorer/#/item/${d.snarc}`
+          : null,
+        birth: d.birth,
+        death: d.death,
+        image: d.image
+      }));
+
+      const chart = f3.createChart({
+        container: document.querySelector("#tree"),
+        data: nodes,
+        config: { orientation: "vertical" }
+      });
+
+      chart.center(qid);
+    }
+
+    load();
+  </script>
+</body>
+</html>
