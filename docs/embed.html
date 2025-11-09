@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SNARC Family Tree</title>
-  <link rel="stylesheet" href="https://unpkg.com/family-chart@3.0.2/dist/styles/family-chart.css">
+  <link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/family-chart@3.0.2/dist/styles/family-chart.css"
+/>
   <style>
     body { margin:0; background:#fff; }
     #tree { width:100%; height:100vh; }
@@ -14,8 +17,7 @@
   <div id="tree"></div>
 
 <script type="module">
-  import * as f3 from "https://unpkg.com/family-chart@3.0.2/dist/family-chart.esm.js";
-
+  import * as f3 from "https://cdn.jsdelivr.net/npm/family-chart@3.0.2/+esm";
   const params = new URLSearchParams(window.location.search);
   const qid = params.get("item");
   const lang = params.get("lang") === "cy" ? "cy,en" : "en,cy";
