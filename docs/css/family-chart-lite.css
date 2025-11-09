@@ -1,35 +1,44 @@
-/* Family Chart Lite – light theme */
-:root{
-  --card-bg:#fff;
-  --card-text:#111;
-  --muted:#777;
-  --line:#9aa0a6;
-  --shadow:0 1px 4px rgba(0,0,0,.12);
-  --radius:10px;
-  --pad:10px;
-  --gap:12px;
+/* Family Chart Lite – light theme with image support */
+:root {
+  --card-bg: #fff;
+  --card-text: #111;
+  --muted: #777;
+  --line: #9aa0a6;
+  --shadow: 0 2px 6px rgba(0, 0, 0, .1);
+  --radius: 12px;
+  --pad: 10px;
+  --gap: 16px;
 }
 
-html,body{height:100%;}
-body{margin:0;background:#fff;}
-#tree{width:100%;height:100vh;overflow:auto;position:relative;}
+html, body { height: 100%; margin: 0; background: #fff; }
+#tree { width: 100%; height: 100vh; overflow: auto; position: relative; }
 
-.fcl-svg{width:100%;height:100%;}
-.fcl-card{
-  fill:#fff;
-  stroke:#e5e7eb;
-  stroke-width:1;
-  rx:10; ry:10;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,.08));
+.fcl-svg { width: 100%; height: 100%; }
+
+.fcl-card {
+  fill: var(--card-bg);
+  stroke: #e5e7eb;
+  stroke-width: 1;
+  rx: var(--radius); ry: var(--radius);
+  filter: drop-shadow(var(--shadow));
 }
-.fcl-name{
+
+.fcl-photo {
+  width: 200px; height: 80px;
+  object-fit: cover;
+  clip-path: inset(0 round 10px);
+}
+
+.fcl-name {
   font: 600 14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   fill: var(--card-text);
 }
-.fcl-years{
+
+.fcl-years {
   font: 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   fill: var(--muted);
 }
-.fcl-link{cursor:pointer; text-decoration:underline;}
-.fcl-connector{stroke: var(--line); stroke-width:1.5; fill:none;}
-.fcl-marriage{stroke: var(--line); stroke-width:2; fill:none;}
+
+.fcl-link { cursor: pointer; text-decoration: underline; }
+.fcl-connector { stroke: var(--line); stroke-width: 1.5; fill: none; }
+.fcl-marriage { stroke: var(--line); stroke-width: 2; fill: none; }
