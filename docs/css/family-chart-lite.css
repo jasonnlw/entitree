@@ -81,13 +81,12 @@ path[kind="ancestor"] {
   font-weight: 600;
   font-size: 28px;
   user-select: none;
-  transition: transform 0.2s ease, fill 0.2s ease, opacity 0.3s ease;
+  transition: fill 0.2s ease, opacity 0.3s ease;
   opacity: 0.6;
-  transform-origin: top right;  
 }
 .fcl-plus:hover {
   fill: #1a73e8;
-  transform: scale(1.4);
   opacity: 1;
 }
+
 
