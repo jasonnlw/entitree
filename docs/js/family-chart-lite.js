@@ -300,7 +300,7 @@ parentIds.forEach(pid => {
 // ---------------------------------------------------------
 // 6b) PARENTS → SUBJECT & SIBLINGS  (lane -1 → 0)
 // ---------------------------------------------------------
-const subjectNode = nodes.find(n => n.id === subjId); // (already exists in your file – re-used here)
+
 
 const fNode = fatherId ? byId[fatherId] : null;
 const mNode = motherId ? byId[motherId] : null;
