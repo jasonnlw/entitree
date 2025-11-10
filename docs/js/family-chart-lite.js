@@ -433,6 +433,34 @@ function commonsThumb(url, width = 200) {
   return url;
 }
 
+function mountSvg(el) {
+  el.innerHTML = "";
+
+  const svg = d3.select(el)
+    .append("svg")
+    .attr("class", "fcl-svg")
+    .attr("viewBox", "0 0 1200 900")
+    .attr("preserveAspectRatio", "xMidYMid meet")
+    .style("cursor", "grab");
+
+  const g = svg.append("g");
+
+  // Enable zoom and pan
+  const zoomed = (event) => g.attr("transform", event.transform);
+  const zoom = d3.zoom()
+    .scaleExtent([0.3, 3]) // zoom limits
+    .on("zoom", zoomed);
+
+  svg.call(zoom);
+
+  // Cursor feedback for drag
+  svg.on("mousedown touchstart", () => svg.style("cursor", "grabbing"));
+  svg.on("mouseup touchend", () => svg.style("cursor", "grab"));
+
+  return { svg, g };
+}
+
+
 function autofit(svg, nodes, { pad = 40 } = {}) {
   if (!nodes.length) return;
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
