@@ -78,19 +78,43 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image ?gender ?genderLabel WHERE {
 }`;
 
   const j3 = await sparql(q3);
-  const meta = Object.create(null);
-  j3.results.bindings.forEach(b => {
-    const id = qidFromIRI(b.e.value);
-    meta[id] = {
-      id,
-      label: b.eLabel?.value || id,
-      dob: b.dob?.value || null,
-      dod: b.dod?.value || null,
-      snarc: b.snarc?.value || null,
-      image: b.image?.value || null,
-      gender: b.genderLabel?.value || null
-    };
+const meta = Object.create(null);
+j3.results.bindings.forEach(b => {
+  const id = qidFromIRI(b.e.value);
+  meta[id] = {
+    id,
+    label: b.eLabel?.value || id,
+    dob: b.dob?.value || null,
+    dod: b.dod?.value || null,
+    snarc: b.snarc?.value || null,
+    image: b.image?.value || null,
+    gender: b.genderLabel?.value || null,
+    // NEW: default generation-availability flags
+    hasParents: false,
+    hasChildren: false
+  };
+});
+// --- NEW: check generation availability for parents/spouses/children of subject ---
+const relatedIds = dedup([...(parentIds || []), ...(spouseIds || []), ...(childIds || [])]);
+
+if (relatedIds.length) {
+  const valuesRel = relatedIds.map(id => `wd:${id}`).join(" ");
+  const qCheck = `
+    SELECT ?person
+           (EXISTS { ?person wdt:P22|wdt:P25 ?p } AS ?hasParents)
+           (EXISTS { ?person wdt:P40 ?c } AS ?hasChildren)
+    WHERE { VALUES ?person { ${valuesRel} } }
+  `;
+  const jCheck = await sparql(qCheck);
+  jCheck.results.bindings.forEach(b => {
+    const id = qidFromIRI(b.person.value);
+    if (meta[id]) {
+      meta[id].hasParents  = (b.hasParents?.value === "true");
+      meta[id].hasChildren = (b.hasChildren?.value === "true");
+    }
   });
+}
+
 
   // ---------- 4) parents of each child ----------
   let childParents = Object.create(null);
@@ -113,17 +137,21 @@ SELECT ?c ?father ?mother WHERE {
 
   // ---------- 5) build nodes ----------
   const nodes = [];
-  const addNode = (id, lane, order) => {
-    const m = meta[id] || { id, label: id };
-    nodes.push({
-      id, lane, order,
-      name: m.label,
-      yrs: (m.dob || m.dod) ? `${years(m.dob, m.dod)}` : "",
-      snarc: m.snarc || null,
-      image: m.image || null,
-      gender: m.gender || null
-    });
-  };
+const addNode = (id, lane, order) => {
+  const m = meta[id] || { id, label: id };
+  nodes.push({
+    id, lane, order,
+    name: m.label,
+    yrs: (m.dob || m.dod) ? `${years(m.dob, m.dod)}` : "",
+    snarc: m.snarc || null,
+    image: m.image || null,
+    gender: m.gender || null,
+    // NEW: pass availability flags and ⊕ eligibility
+    hasParents: m.hasParents === true,
+    hasChildren: m.hasChildren === true,
+    eligiblePlus: (parentIds?.includes(id) || spouseIds?.includes(id) || childIds?.includes(id)) === true
+  });
+};
   parentIds.forEach((id, i) => addNode(id, -1, i));        // parents (row -1)
   spouseIds.forEach((id, i) => addNode(id, 0, -(i + 1)));  // spouses left of subject
   addNode(subjId, 0, 0);                                    // subject
@@ -369,17 +397,52 @@ function drawCard(g, n, { cardW, cardH }){
       .attr("preserveAspectRatio","xMidYTop slice").attr("clip-path","inset(0 round 8px)");
   }
   const textX = n.image ? 10 + imgSize + 12 : 14;
-  const textY = cardH/2 - 6;
-  const name = grp.append("text").attr("class","fcl-name").attr("x",textX).attr("y",textY).text(n.name);
-  if (n.yrs) grp.append("text").attr("class","fcl-years").attr("x",textX).attr("y",textY+18).text(n.yrs);
+  const textY = cardH / 2 - 6;
+  const name = grp.append("text")
+    .attr("class", "fcl-name")
+    .attr("x", textX)
+    .attr("y", textY)
+    .text(n.name);
+
+  if (n.yrs) {
+    grp.append("text")
+      .attr("class", "fcl-years")
+      .attr("x", textX)
+      .attr("y", textY + 18)
+      .text(n.yrs);
+  }
+
   if (n.snarc) {
-    name.attr("class","fcl-name fcl-link").style("text-decoration","underline")
+    name
+      .attr("class", "fcl-name fcl-link")
+      .style("text-decoration", "underline")
       .on("click", () => {
         const url = `https://jasonnlw.github.io/SNARC-explorer/#/item/${n.snarc}`;
         window.top.location.href = url;
       });
   }
+
+  // --- NEW: ⊕ expansion control (top-right corner) ---
+  // Shown only for parents, spouses, or children of the subject
+  // if they have additional generations available.
+  if (n.eligiblePlus && (n.hasParents || n.hasChildren)) {
+    grp.append("text")
+      .attr("x", cardW - 16)
+      .attr("y", 18)
+      .attr("class", "fcl-plus")
+      .attr("text-anchor", "middle")
+      .attr("font-size", 18)
+      .attr("cursor", "pointer")
+      .text("⊕")
+      .on("click", () => {
+        // Reload tree centered on this person’s QID
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set("item", n.id);
+        window.top.location.href = newUrl.toString();
+      });
+  }
 }
+
 
 function commonsThumb(url, width=200){
   if (!url) return "";
