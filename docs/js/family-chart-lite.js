@@ -172,12 +172,22 @@ if (fatherId && motherId) {
   const mother = nodes.find(n => n.id === motherId);
   const subject = nodes.find(n => n.id === subjId);
   if (father && mother && subject) {
-    const midX = (father.x + mother.x) / 2;
-    const topY = father.y + 32;
-    // join parents
-    connectors.push({ kind: "connector", d: `M ${father.x} ${topY} H ${mother.x}` });
-    // vertical from midpoint to subject
-    connectors.push({ kind: "connector", d: `M ${midX} ${topY} V ${subject.y - 32}` });
+    // y at bottom of parent cards
+    const topY = Math.min(father.y, mother.y) + 32;
+    const leftX  = Math.min(father.x, mother.x);
+    const rightX = Math.max(father.x, mother.x);
+
+    // 1) horizontal bar joining parents
+    connectors.push({
+      kind: "connector",
+      d: `M ${leftX} ${topY} H ${rightX}`
+    });
+
+    // 2) vertical drop EXACTLY at subject center-top
+    connectors.push({
+      kind: "connector",
+      d: `M ${subject.x} ${topY} V ${subject.y - 32}`
+    });
   }
 } else {
   // single parent fallback
@@ -185,6 +195,7 @@ if (fatherId && motherId) {
   const subject = nodes.find(n => n.id === subjId);
   if (p && subject) connectors.push(elbow(p, subject));
 }
+
 
 /* -------- 2. Subject ↔ Spouses -------- */
 spouseIds.forEach(spId => {
