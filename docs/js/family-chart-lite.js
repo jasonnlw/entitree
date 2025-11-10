@@ -440,13 +440,13 @@ function drawCard(g, n, { cardW, cardH }){
   // if they have additional generations available.
   if (n.eligiblePlus && (n.hasParents || n.hasChildren)) {
     grp.append("text")
-      .attr("x", cardW - 16)
-      .attr("y", 18)
+      .attr("x", cardW - 20)
+      .attr("y", 22)
       .attr("class", "fcl-plus")
       .attr("text-anchor", "middle")
-      .attr("font-size", 18)
+      .attr("font-size", 25)
       .attr("cursor", "pointer")
-      .text("⊕")
+      .text("➲")
       .on("click", () => {
         // Reload tree centered on this person’s QID
         const newUrl = new URL(window.location.href);
