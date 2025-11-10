@@ -216,7 +216,7 @@ function drawFan(g, parents, children, colorClass = "fcl-kin") {
 
   // --- 9) Connectors (organic lines) ---
 
-  // spouses (red)
+
   // spouses (red arches above cards)
 spouseIds.forEach(spId=>{
   const a = nodes.find(n => n.id === subjId);
@@ -225,19 +225,28 @@ spouseIds.forEach(spId=>{
   drawPath(gSpouse, marriageArch(center(a), center(b), 60), "fcl-spouse");
 });
 
-  // parents -> subject + siblings (blue)
- // parents → subject + siblings (blue fan)
-const parentNodes = [fatherId, motherId].map(id => nodes.find(n => n && n.id === id)).filter(Boolean);
-const sibNodes = [subjId, ...siblingIds].map(id => nodes.find(n => n && n.id === id)).filter(Boolean);
+
+// parents → subject + siblings (blue fan)
+const parentNodes = [fatherId, motherId]
+  .map(id => id ? nodes.find(n => n.id === id) : null)
+  .filter(Boolean);
+
+const sibNodes = [subjId, ...siblingIds]
+  .map(id => id ? nodes.find(n => n.id === id) : null)
+  .filter(Boolean);
+
 if (parentNodes.length && sibNodes.length) {
   drawFan(gKin, parentNodes, sibNodes, "fcl-kin");
 }
 
 
+
  // subject + spouse(s) → children (blue fan)
-const childNodes = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+const childNodes = childIds
+  .map(id => id ? nodes.find(n => n.id === id) : null)
+  .filter(Boolean);
+
 if (childNodes.length) {
-  // collect available parents (subject + any spouse nodes present)
   const parents = [nodes.find(n => n.id === subjId)]
     .concat(spouseIds.map(id => nodes.find(n => n.id === id)))
     .filter(Boolean);
