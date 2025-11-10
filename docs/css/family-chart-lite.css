@@ -62,7 +62,9 @@ path[kind="ancestor"] {
   font-weight: bold;
   user-select: none;
 }
-.fcl-plus:hover { fill: #0b57d0; }
+.fcl-plus:hover {
+  fill: #0b57d0;
+}
 
 
 /* Smooth connector styling */
