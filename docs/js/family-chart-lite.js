@@ -140,11 +140,22 @@ SELECT ?c ?father ?mother WHERE {
   const cardW = 220, cardH = 100;
   const laneY = (lane) => (lane + 1) * rowH;
   const centerX = 600;
-  nodes.forEach(n => {
-    const dx = (n.xi - centerXi) * (colW + gapX);
-    n.x = centerX + dx;
-    n.y = laneY(n.lane);
+  const cardW = 220, cardH = 100;
+const laneY = (lane) => (lane + 1) * rowH;
+const centerX = 600;
+
+// For each lane (generation), compute its width and center-align its members
+Object.entries(lanes).forEach(([laneKey, laneNodes]) => {
+  const count = laneNodes.length;
+  const totalWidth = (count - 1) * (colW + gapX);
+  const startX = centerX - totalWidth / 2;
+
+  laneNodes.forEach((n, i) => {
+    n.x = startX + i * (colW + gapX);
+    n.y = laneY(Number(laneKey));
   });
+});
+
 
   // ---------- 7) svg layers ----------
   const { svg, g, gKin, gSpouse, gCards } = mountSvg(el);
