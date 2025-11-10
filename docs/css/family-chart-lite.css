@@ -65,12 +65,6 @@ path[kind="ancestor"] {
 .fcl-plus:hover {
   fill: #0b57d0;
 }
-.fcl-plus {
-  fill: red !important;
-  font-size: 20px !important;
-  opacity: 1 !important;
-}
-
 
 /* Smooth connector styling */
 .fcl-kin { stroke: #9DA1A6; stroke-width: 3.5; fill: none; stroke-linecap: round; opacity: .95; }
@@ -80,3 +74,16 @@ path[kind="ancestor"] {
 .fcl-link { cursor: pointer; text-decoration: underline; }
 .fcl-connector { stroke: var(--line); stroke-width: 1.5; fill: none; }
 .fcl-marriage { stroke: var(--line); stroke-width: 2; fill: none; }
+
+/* === Expansion Symbol (⊕) === */
+.fcl-plus {
+  fill: red !important;       /* temporary bright colour for debugging */
+  font-size: 20px !important;
+  font-weight: bold;
+  user-select: none;
+  opacity: 1 !important;
+}
+.fcl-plus:hover {
+  fill: #0b57d0;
+}
+
