@@ -131,26 +131,34 @@ SELECT ?c ?father ?mother WHERE {
   childIds.forEach((id, i) => addNode(id, +1, i));          // children
 
 
-  // ---------- 6) coordinates (center-aligned rows) ----------
+// ---------- 6) coordinates (center-aligned & responsive) ----------
 const rowH = 180, colW = 260, gapX = 30;
 const cardW = 220, cardH = 100;
 const laneY = (lane) => (lane + 1) * rowH;
-const centerX = 600;
+
+// Use container width if available; fallback to 1200 for safety
+const getCenterX = () => (el.clientWidth ? el.clientWidth / 2 : 600);
+let centerX = getCenterX();
 
 const lanes = groupBy(nodes, n => n.lane);
 Object.keys(lanes).forEach(k => lanes[k].sort((a, b) => a.order - b.order));
 
-// For each lane (generation), compute its width and center-align its members
-Object.entries(lanes).forEach(([laneKey, laneNodes]) => {
-  const count = laneNodes.length;
-  const totalWidth = (count - 1) * (colW + gapX);
-  const startX = centerX - totalWidth / 2;
+function positionNodes() {
+  centerX = getCenterX();
+  Object.entries(lanes).forEach(([laneKey, laneNodes]) => {
+    const count = laneNodes.length;
+    const totalWidth = (count - 1) * (colW + gapX);
+    const startX = centerX - totalWidth / 2;
 
-  laneNodes.forEach((n, i) => {
-    n.x = startX + i * (colW + gapX);
-    n.y = laneY(Number(laneKey));
+    laneNodes.forEach((n, i) => {
+      n.x = startX + i * (colW + gapX);
+      n.y = laneY(Number(laneKey));
+    });
   });
-});
+}
+
+positionNodes(); // initial placement
+
 
 
   // ---------- 7) svg layers ----------
