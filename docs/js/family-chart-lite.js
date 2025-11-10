@@ -109,8 +109,8 @@ if (relatedIds.length) {
   jCheck.results.bindings.forEach(b => {
     const id = qidFromIRI(b.person.value);
     if (meta[id]) {
-      meta[id].hasParents  = (b.hasParents?.value === "true");
-      meta[id].hasChildren = (b.hasChildren?.value === "true");
+  meta[id].hasParents  = Boolean(b.hasParents?.value && b.hasParents.value !== "false" && b.hasParents.value !== "0");
+  meta[id].hasChildren = Boolean(b.hasChildren?.value && b.hasChildren.value !== "false" && b.hasChildren.value !== "0");
     }
   });
 }
