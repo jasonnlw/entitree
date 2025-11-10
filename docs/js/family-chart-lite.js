@@ -66,15 +66,17 @@ SELECT ?sib WHERE {
   const allIds = dedup([subjId, ...spouseIds, ...childIds, ...parentIds, ...siblingIds]);
   if (!allIds.length) { mountEmpty(el, "No family relations to render."); return; }
   const values = allIds.map(id => `wd:${id}`).join(" ");
-  const q3 = `
-SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
+ const q3 = `
+SELECT ?e ?eLabel ?dob ?dod ?snarc ?image ?gender ?genderLabel WHERE {
   VALUES ?e { ${values} }
   OPTIONAL { ?e wdt:P569 ?dob. }
   OPTIONAL { ?e wdt:P570 ?dod. }
   OPTIONAL { ?e wdt:P12749 ?snarc. }
   OPTIONAL { ?e wdt:P18 ?image. }
+  OPTIONAL { ?e wdt:P21 ?gender. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "${langPref}". }
 }`;
+
   const j3 = await sparql(q3);
   const meta = Object.create(null);
   j3.results.bindings.forEach(b => {
@@ -85,7 +87,8 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
       dob: b.dob?.value || null,
       dod: b.dod?.value || null,
       snarc: b.snarc?.value || null,
-      image: b.image?.value || null
+      image: b.image?.value || null,
+      gender: b.genderLabel?.value || null
     };
   });
 
@@ -117,7 +120,8 @@ SELECT ?c ?father ?mother WHERE {
       name: m.label,
       yrs: (m.dob || m.dod) ? `${years(m.dob, m.dod)}` : "",
       snarc: m.snarc || null,
-      image: m.image || null
+      image: m.image || null,
+      gender: m.gender || null
     });
   };
   parentIds.forEach((id, i) => addNode(id, -1, i));        // parents (row -1)
@@ -296,7 +300,22 @@ function mountSvg(el){
 
 function drawCard(g, n, { cardW, cardH }){
   const grp = g.append("g").attr("transform", `translate(${n.x - cardW/2}, ${n.y - cardH/2})`);
-  grp.append("rect").attr("class","fcl-card").attr("width",cardW).attr("height",cardH).attr("rx",12).attr("ry",12);
+
+    const fillColor =
+    n.gender?.toLowerCase().includes("female") ? "#ffd6e7" :   // light pink
+    n.gender?.toLowerCase().includes("male")   ? "#cce5ff" :   // light blue
+    "#f5f5f5";                                                 // neutral fallback
+
+  // --- Card background ---
+  grp.append("rect")
+    .attr("class", "fcl-card")
+    .attr("width", cardW)
+    .attr("height", cardH)
+    .attr("rx", 12)
+    .attr("ry", 12)
+    .attr("fill", fillColor)
+    .attr("stroke", "#ddd")
+    .attr("stroke-width", 1);
 
   const imgSize = 80;
   if (n.image) {
