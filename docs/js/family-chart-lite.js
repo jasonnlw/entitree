@@ -1,11 +1,10 @@
-// Family Chart Lite – Smooth Junctions v2
-// - Smooth Bézier connectors behind cards
-// - High marriage arches with steeper incline
-// - Merged parent→subject(+siblings) stems
-// - Subject(+spouse groups) → children stems (per spouse), using real parentage when available
+// Family Chart Lite – Smooth Junctions v2.1
+// Fixes:
+// - Parents→(subject + siblings): always fan from a single junction to *each* child on the centre row
+// - Removes mixed logic that drew a separate subject-only drop
+// - Keeps high marriage arches and per‑spouse children fans
 // Requires: d3 v7+
 
-// Public API
 export async function drawFamilyTree(el, qid, opts = {}) {
   const langPref = (opts.lang === "cy" ? "cy,en" : "en,cy");
   const endpoint = "https://query.wikidata.org/sparql";
@@ -92,7 +91,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
     };
   });
 
-  // ---------- 4) parents of each child (truthy grouping) ----------
+  // ---------- 4) parents of each child ----------
   let childParents = Object.create(null);
   if (childIds.length) {
     const cvals = childIds.map(id => `wd:${id}`).join(" ");
@@ -123,11 +122,11 @@ SELECT ?c ?father ?mother WHERE {
       image: m.image || null
     });
   };
-  parentIds.forEach((id, i) => addNode(id, -1, i));        // parents (row -1)
-  spouseIds.forEach((id, i) => addNode(id, 0, -(i + 1)));  // spouses left of subject
-  addNode(subjId, 0, 0);                                    // subject
-  siblingIds.forEach((id, i) => addNode(id, 0, +(i + 1))); // siblings right
-  childIds.forEach((id, i) => addNode(id, +1, i));          // children
+  parentIds.forEach((id, i) => addNode(id, -1, i));
+  spouseIds.forEach((id, i) => addNode(id, 0, -(i + 1)));
+  addNode(subjId, 0, 0);
+  siblingIds.forEach((id, i) => addNode(id, 0, +(i + 1)));
+  childIds.forEach((id, i) => addNode(id, +1, i));
 
   // ---------- 6) coordinates ----------
   const rowH = 180, colW = 260, gapX = 30;
@@ -149,24 +148,17 @@ SELECT ?c ?father ?mother WHERE {
   const { svg, g, gKin, gSpouse, gCards } = mountSvg(el);
 
   // ---------- 8) path helpers ----------
-  const PARENT_LIFT = 26;   // offset from parent card edge
-  const CHILD_BAR_PAD = 60; // bar above children
-  const ARCH_LIFT = 100;    // marriage arch height
-  const ARCH_TIGHT = 0.25;  // 0..0.5, closer to ends = steeper sides
+  const PARENT_LIFT = 26;
+  const CHILD_BAR_PAD = 60;
+  const ARCH_LIFT = 100;
+  const ARCH_TIGHT = 0.25;
 
   const center = (n) => ({ x: n.x, y: n.y });
 
-  // cubic: vertical-friendly smooth curve
   function vCurve(a, b) {
     const midY = (a.y + b.y) / 2;
     return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
   }
-  // cubic: horizontal-friendly smooth curve
-  function hCurve(a, b) {
-    const midX = (a.x + b.x) / 2;
-    return `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
-  }
-  // high arch above cards with steeper sides
   function marriageArch(a, b, lift = ARCH_LIFT, tight = ARCH_TIGHT) {
     const minY = Math.min(a.y, b.y);
     const c1x = a.x + (b.x - a.x) * tight;
@@ -174,12 +166,8 @@ SELECT ?c ?father ?mother WHERE {
     const topY = minY - lift;
     return `M ${a.x} ${a.y} C ${c1x} ${topY}, ${c2x} ${topY}, ${b.x} ${b.y}`;
   }
-  function drawPath(g, d, klass) {
-    g.append("path").attr("class", klass).attr("d", d);
-  }
-  function dot(g, x, y, klass = "fcl-junction") {
-    g.append("circle").attr("class", klass).attr("cx", x).attr("cy", y).attr("r", 3);
-  }
+  function drawPath(g, d, klass) { g.append("path").attr("class", klass).attr("d", d); }
+  function dot(g, x, y, klass = "fcl-junction") { g.append("circle").attr("class", klass).attr("cx", x).attr("cy", y).attr("r", 3); }
 
   // ---------- 9) connectors ----------
 
@@ -191,60 +179,46 @@ SELECT ?c ?father ?mother WHERE {
     drawPath(gSpouse, marriageArch(center(a), center(b)), "fcl-spouse");
   });
 
-  // 9b) Parents → subject + siblings (single smooth junction)
+  // 9b) Parents → (subject + siblings): always fan to EACH child on centre row
   (function() {
     const parentNodes = [fatherId, motherId]
       .map(id => id ? nodes.find(n => n.id === id) : null)
       .filter(Boolean);
-    const sibNodes = [subjId, ...siblingIds]
+    const midRowChildren = [subjId, ...siblingIds]
       .map(id => id ? nodes.find(n => n.id === id) : null)
       .filter(Boolean);
-    if (!parentNodes.length || !sibNodes.length) return;
+    if (!parentNodes.length || !midRowChildren.length) return;
 
-    // Upper junction sits midway between bottom of parents and top of the centre row
     const parentsBottomY = Math.min(...parentNodes.map(p => p.y)) + 32;
-    const groupTopY     = Math.min(...sibNodes.map(s => s.y)) - 32;
+    const groupTopY     = Math.min(...midRowChildren.map(s => s.y)) - 32;
     const jx = parentNodes.reduce((s,p)=>s+p.x,0) / parentNodes.length;
     const jy = parentsBottomY + (groupTopY - parentsBottomY) * 0.45;
 
-    // inbound curves from each parent
     parentNodes.forEach(p => {
-      const from = { x: p.x, y: p.y + PARENT_LIFT };
-      const to   = { x: jx,  y: jy };
-      drawPath(gKin, vCurve(from, to), "fcl-kin");
+      drawPath(gKin, vCurve({ x: p.x, y: p.y + PARENT_LIFT }, { x: jx, y: jy }), "fcl-kin");
     });
+    dot(gKin, jx, jy);
 
-    dot(gKin, jx, jy); // junction marker
+    const barY = Math.min(...midRowChildren.map(c => c.y)) - CHILD_BAR_PAD;
+    drawPath(gKin, vCurve({ x: jx, y: jy }, { x: jx, y: barY }), "fcl-kin");
 
-    // down to subject-top centre
-    const subject = nodes.find(n => n.id === subjId);
-    if (subject) {
-      const st = { x: subject.x, y: subject.y - 32 };
-      drawPath(gKin, vCurve({ x: jx, y: jy }, st), "fcl-kin");
-    }
+    const leftX  = Math.min(...midRowChildren.map(c => c.x));
+    const rightX = Math.max(...midRowChildren.map(c => c.x));
+    drawPath(gKin, `M ${leftX} ${barY} H ${rightX}`, "fcl-kin");
 
-    // If there are siblings, add a small bar slightly above their tops and drop lines
-    if (sibNodes.length > 1) {
-      const leftX  = Math.min(...sibNodes.map(c => c.x));
-      const rightX = Math.max(...sibNodes.map(c => c.x));
-      const barY   = Math.min(...sibNodes.map(c => c.y)) - CHILD_BAR_PAD;
-      drawPath(gKin, vCurve({ x: jx, y: jy }, { x: jx, y: barY }), "fcl-kin"); // stem
-      drawPath(gKin, `M ${leftX} ${barY} H ${rightX}`, "fcl-kin");            // bar
-      sibNodes.forEach(c => {
-        drawPath(gKin, vCurve({ x: c.x, y: barY }, { x: c.x, y: c.y - 32 }), "fcl-kin");
-      });
-    }
+    midRowChildren.forEach(c => {
+      drawPath(gKin, vCurve({ x: c.x, y: barY }, { x: c.x, y: c.y - 32 }), "fcl-kin");
+    });
   })();
 
-  // 9c) Subject(+spouses) → children (per spouse group, using actual parentage)
+  // 9c) Subject(+spouses) → children (per spouse group, smooth fan)
   (function () {
     const subject = nodes.find(n => n.id === subjId);
     if (!subject || !childIds.length) return;
     const childNodes = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
     if (!childNodes.length) return;
 
-    // group children by spouse (other parent) where known
-    const groups = new Map(); // key: spouseId or 'unknown'
+    const groups = new Map(); // spouseId or 'unknown'
     const ensure = k => { if (!groups.has(k)) groups.set(k, []); return groups.get(k); };
 
     childNodes.forEach(c => {
@@ -254,7 +228,6 @@ SELECT ?c ?father ?mother WHERE {
       if (includesSubject) ensure(spouse || "unknown").push(c);
     });
 
-    // render each group
     groups.forEach((kids, key) => {
       if (!kids.length) return;
       const spouse = key === "unknown" ? null : nodes.find(n => n.id === key);
@@ -263,13 +236,11 @@ SELECT ?c ?father ?mother WHERE {
       const topY   = subject.y + 32;
       const jx     = parents.reduce((s, p) => s + p.x, 0) / parents.length;
       const minChildTop = Math.min(...kids.map(k => k.y)) - 32;
-      const jy     = topY + (minChildTop - topY) * 0.35; // mid between subject bottom and child top
+      const jy     = topY + (minChildTop - topY) * 0.35;
 
       parents.forEach(p => {
-        const from = { x: p.x, y: topY };
-        drawPath(gKin, vCurve(from, { x: jx, y: jy }), "fcl-kin");
+        drawPath(gKin, vCurve({ x: p.x, y: topY }, { x: jx, y: jy }), "fcl-kin");
       });
-
       dot(gKin, jx, jy);
 
       const barY = Math.min(...kids.map(k => k.y)) - CHILD_BAR_PAD;
