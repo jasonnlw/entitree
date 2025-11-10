@@ -1,13 +1,12 @@
-// Family Chart Lite (vertical layout, CSP-safe, no external deps except local d3)
-// Features: bilingual labels, years (YYYY–YYYY), SNARC link (P12749), auto-center on root,
-// parents above, subject with spouses / siblings, children below.
-// NOTE: This focuses on robust, immediate family rendering suitable for embedded profile pages.
+// Family Chart Lite (organic connectors version)
+// Features: bilingual labels, years, SNARC links, smooth kin/spouse connectors, zoom/pan
+// Requires: local d3 (v7+), family-chart-lite.css
 
 export async function drawFamilyTree(el, qid, opts = {}) {
   const langPref = (opts.lang === "cy" ? "cy,en" : "en,cy");
   const endpoint = "https://query.wikidata.org/sparql";
 
-  // ------ Helpers ------
+  // --- Helpers ---
   const sparql = async (q) => {
     const url = `${endpoint}?query=${encodeURIComponent(q)}&format=json`;
     const res = await fetch(url, { headers: { "Accept": "application/sparql-results+json" }});
@@ -17,15 +16,14 @@ export async function drawFamilyTree(el, qid, opts = {}) {
   const y4 = (iso) => (iso && /^\d{4}/.test(iso)) ? iso.slice(0,4) : null;
   const years = (b,d) => {
     const B = y4(b), D = y4(d);
-    return (B && D) ? `(${B}–${D})` : "";
+    return (B && D) ? `(${B}–${D})` : (B ? `(${B}–)` : "");
   };
   const qidFromIRI = (iri) => {
     const m = /entity\/(Q\d+)/.exec(iri) || /www.wikidata.org\/(Q\d+)/.exec(iri);
     return m ? m[1] : iri;
   };
 
-  // ------ 1) Fetch core relations for subject ------
-  // We get subject label/dates, spouses, parents, children (+ P12749)
+  // --- 1) Subject + core relations ---
   const q1 = `
 SELECT ?person ?personLabel ?dob ?dod ?father ?mother ?spouse ?child ?snarc WHERE {
   VALUES ?person { wd:${qid} }
@@ -60,7 +58,7 @@ SELECT ?person ?personLabel ?dob ?dod ?father ?mother ?spouse ?child ?snarc WHER
   const motherId  = subjRow.mother ? qidFromIRI(subjRow.mother.value) : null;
   const parentIds = dedup([fatherId, motherId].filter(Boolean));
 
-  // ------ 2) Fetch siblings by parents (children of parents minus subject) ------
+  // --- 2) Siblings ---
   let siblingIds = [];
   if (parentIds.length) {
     const parentValues = parentIds.map(id => `wd:${id}`).join(" ");
@@ -74,14 +72,14 @@ SELECT ?sib WHERE {
     siblingIds = dedup(j2.results.bindings.map(b => qidFromIRI(b.sib.value)));
   }
 
-  // ------ 3) Gather everyone we will render + fetch labels/dates/P12749 for all ------
+  // --- 3) Metadata for all nodes ---
   const allIds = dedup([subjId, ...spouseIds, ...childIds, ...parentIds, ...siblingIds]);
   if (!allIds.length) {
     mountEmpty(el, "No family relations to render.");
     return;
   }
   const values = allIds.map(id => `wd:${id}`).join(" ");
-const q3 = `
+  const q3 = `
 SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   VALUES ?e { ${values} }
   OPTIONAL { ?e wdt:P569 ?dob. }
@@ -92,359 +90,208 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
 }`;
   const j3 = await sparql(q3);
   const meta = Object.create(null);
-j3.results.bindings.forEach(b => {
-  const id = qidFromIRI(b.e.value);
-  meta[id] = {
-    id,
-    label: b.eLabel?.value || id,
-    dob: b.dob?.value || null,
-    dod: b.dod?.value || null,
-    snarc: b.snarc?.value || null,
-    image: b.image?.value || null
-  };
-});
+  j3.results.bindings.forEach(b => {
+    const id = qidFromIRI(b.e.value);
+    meta[id] = {
+      id,
+      label: b.eLabel?.value || id,
+      dob: b.dob?.value || null,
+      dod: b.dod?.value || null,
+      snarc: b.snarc?.value || null,
+      image: b.image?.value || null
+    };
+  });
 
-  // ------ 4) Build nodes with layout lanes (vertical) ------
-  // Lanes (rows): -1 = parents, 0 = subject / spouses / siblings, +1 = children
-  // Within lane 0: spouses LEFT of subject, siblings RIGHT of subject.
+  // --- 4) Parents of each child (for child-level connectors) ---
+  let childParents = Object.create(null);
+  if (childIds.length) {
+    const cvals = childIds.map(id => `wd:${id}`).join(" ");
+    const q4 = `
+SELECT ?c ?father ?mother WHERE {
+  VALUES ?c { ${cvals} }
+  OPTIONAL { ?c wdt:P22 ?father. }
+  OPTIONAL { ?c wdt:P25 ?mother. }
+}`;
+    const j4 = await sparql(q4);
+    j4.results.bindings.forEach(b => {
+      const cid = qidFromIRI(b.c.value);
+      const f = b.father ? qidFromIRI(b.father.value) : null;
+      const m = b.mother ? qidFromIRI(b.mother.value) : null;
+      childParents[cid] = [f, m].filter(Boolean);
+    });
+  }
+
+  // --- 5) Build nodes ---
   const nodes = [];
-  const addNode = (id, lane, sideOrder) => {
+  const addNode = (id, lane, order) => {
     const m = meta[id] || { id, label:id };
- nodes.push({
-  id,
-  lane,
-  order: sideOrder,
-  name: m.label,
-  yrs: years(m.dob, m.dod),
-  snarc: m.snarc || null,
-  image: m.image || null
-});
+    nodes.push({
+      id,
+      lane,
+      order,
+      name: m.label,
+      yrs: years(m.dob, m.dod),
+      snarc: m.snarc || null,
+      image: m.image || null
+    });
   };
 
-  // parents
-  parentIds.forEach((id, i) => addNode(id, -1, i)); // father ~0, mother ~1 (original order preserved)
-
-  // center row
-  spouseIds.forEach((id, i) => addNode(id, 0, -(i+1))); // left side (negative order)
-  addNode(subjId, 0, 0);                                 // subject center
-  siblingIds.forEach((id, i) => addNode(id, 0, +(i+1))); // right side (positive order)
-
-  // children
+  parentIds.forEach((id, i) => addNode(id, -1, i));
+  spouseIds.forEach((id, i) => addNode(id, 0, -(i+1)));
+  addNode(subjId, 0, 0);
+  siblingIds.forEach((id, i) => addNode(id, 0, +(i+1)));
   childIds.forEach((id, i) => addNode(id, +1, i));
 
-  // ------ 5) Compute coordinates ------
-  // Simple vertical layout with equal row heights and card width.
+  // --- 6) Coordinates ---
   const rowH = 180, colW = 260, gapX = 30;
-  // Normalize columns: sort by lane then order
   const lanes = groupBy(nodes, n => n.lane);
   Object.keys(lanes).forEach(k => lanes[k].sort((a,b)=>a.order-b.order));
-
-  // Assign x positions per lane
-  const laneWidths = {};
-  Object.keys(lanes).forEach(k => {
-    laneWidths[k] = lanes[k].length;
-    lanes[k].forEach((n, idx) => n.xi = idx);
-  });
-
-  // Establish a global “center” column at subject.xi
+  Object.keys(lanes).forEach(k => lanes[k].forEach((n,i)=> n.xi=i));
   const subjectNode = nodes.find(n => n.id === subjId);
   const centerXi = subjectNode ? subjectNode.xi : 0;
-
-  // Compute absolute pixel coords (subject centered)
   const cardW = 220, cardH = 100;
-  const laneY = (lane) => (lane + 1) * rowH; // parents at ~rowH, center at ~2*rowH, children at ~3*rowH
-
-  // Determine center offset so subject is visually centered
-  const centerX = 600; // viewport logical center; SVG will scale to container
-  nodes.forEach(n => {
-    // relative position from subject
-    const dx = (n.xi - centerXi) * (colW + gapX);
-    n.x = centerX + dx;
-    n.y = laneY(n.lane);
+  const laneY = (lane) => (lane + 1) * rowH;
+  const centerX = 600;
+  nodes.forEach(n=>{
+    const dx=(n.xi-centerXi)*(colW+gapX);
+    n.x=centerX+dx;
+    n.y=laneY(n.lane);
   });
 
-/* -------- Adjust parent positions above their children -------- */
-if (parentIds.length) {
-  const father = nodes.find(n => n.id === fatherId);
-  const mother = nodes.find(n => n.id === motherId);
-  const children = [subjId, ...siblingIds]
-    .map(id => nodes.find(n => n.id === id))
-    .filter(Boolean);
+  // --- 7) SVG mount (layers) ---
+  const { svg, g, gKin, gSpouse, gCards } = mountSvg(el);
 
-  if ((father || mother) && children.length) {
-    // find horizontal midpoint of all children
-    const avgX =
-      children.reduce((sum, c) => sum + c.x, 0) / children.length;
+  // --- 8) Smooth connector helpers ---
+  function center(n){return {x:n.x,y:n.y};}
+  function smoothCurve(a,b){
+    const midY=(a.y+b.y)/2;
+    return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
+  }
+  function smoothCurveH(a,b){
+    const midX=(a.x+b.x)/2;
+    return `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
+  }
+  function drawPath(g,d,klass){
+    g.append("path").attr("class",klass).attr("d",d);
+  }
 
-    // distance between parents (if both)
-    const parentGap = 180;
+  // --- 9) Connectors (organic lines) ---
 
-    if (father && mother) {
-      father.x = avgX - parentGap / 2;
-      mother.x = avgX + parentGap / 2;
-    } else if (father) {
-      father.x = avgX;
-    } else if (mother) {
-      mother.x = avgX;
+  // spouses (red)
+  spouseIds.forEach(spId=>{
+    const a=nodes.find(n=>n.id===subjId);
+    const b=nodes.find(n=>n.id===spId);
+    if(!a||!b)return;
+    drawPath(gSpouse,smoothCurveH(center(a),center(b)),"fcl-spouse");
+  });
+
+  // parents -> subject + siblings (blue)
+  const sibGroup=[subjId,...siblingIds];
+  sibGroup.forEach(cid=>{
+    const child=nodes.find(n=>n.id===cid);
+    if(!child)return;
+    [fatherId,motherId].filter(Boolean).forEach(pid=>{
+      const par=nodes.find(n=>n.id===pid);
+      if(!par)return;
+      drawPath(gKin,smoothCurve(center(par),center(child)),"fcl-kin");
+    });
+  });
+
+  // subject’s children (blue)
+  childIds.forEach(cid=>{
+    const child=nodes.find(n=>n.id===cid);
+    if(!child)return;
+    const parents=childParents[cid]||[];
+    parents.forEach(pid=>{
+      const par=nodes.find(n=>n.id===pid);
+      if(!par)return;
+      drawPath(gKin,smoothCurve(center(par),center(child)),"fcl-kin");
+    });
+    if(!parents.length){
+      const sub=nodes.find(n=>n.id===subjId);
+      if(sub) drawPath(gKin,smoothCurve(center(sub),center(child)),"fcl-kin");
     }
-  }
-}
-  
-
-  // ------ 6) Build connectors ------
-const connectors = [];
-
-/* -------- 1. Parents → Subject -------- */
-if (fatherId && motherId) {
-  const father = nodes.find(n => n.id === fatherId);
-  const mother = nodes.find(n => n.id === motherId);
-  const subject = nodes.find(n => n.id === subjId);
-  if (father && mother && subject) {
-    // y at bottom of parent cards
-    const topY = Math.min(father.y, mother.y) + 32;
-    const leftX  = Math.min(father.x, mother.x);
-    const rightX = Math.max(father.x, mother.x);
-
-    // 1) horizontal bar joining parents
-    connectors.push({
-      kind: "connector",
-      d: `M ${leftX} ${topY} H ${rightX}`
-    });
-
-    // 2) vertical drop EXACTLY at subject center-top
-    connectors.push({
-      kind: "connector",
-      d: `M ${subject.x} ${topY} V ${subject.y - 32}`
-    });
-  }
-} else {
-  // single parent fallback
-  const p = nodes.find(n => n.id === (fatherId || motherId));
-  const subject = nodes.find(n => n.id === subjId);
-  if (p && subject) connectors.push(elbow(p, subject));
-}
-
-
-/* -------- 2. Subject ↔ Spouses -------- */
-spouseIds.forEach(spId => {
-  const sp = nodes.find(n => n.id === spId);
-  const subject = nodes.find(n => n.id === subjId);
-  if (!sp || !subject) return;
-  connectors.push({ kind: "marriage", d: `M ${subject.x} ${subject.y + 32} H ${sp.x}` });
-});
-
-/* -------- 3. Subject(+spouse) → Children -------- */
-if (childIds.length) {
-  const subject = nodes.find(n => n.id === subjId);
-  const spouses = spouseIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-  const children = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-
-  if (spouses.length) {
-    // create a junction for each spouse
-    spouses.forEach(sp => {
-      const midX = (sp.x + subject.x) / 2;
-      const topY = subject.y + 32;
-      const juncY = topY + 40;
-
-      // vertical from couple to junction
-      connectors.push({ kind: "connector", d: `M ${midX} ${topY} V ${juncY}` });
-
-      // children spread
-      if (children.length === 1) {
-        const c = children[0];
-        connectors.push({ kind: "connector", d: `M ${midX} ${juncY} V ${c.y - 32}` });
-      } else {
-        const left = Math.min(...children.map(c => c.x));
-        const right = Math.max(...children.map(c => c.x));
-        const barY = children[0].y - 60;
-        connectors.push({ kind: "connector", d: `M ${midX} ${juncY} V ${barY}` });
-        connectors.push({ kind: "connector", d: `M ${left} ${barY} H ${right}` });
-        children.forEach(c => {
-          connectors.push({ kind: "connector", d: `M ${c.x} ${barY} V ${c.y - 32}` });
-        });
-      }
-    });
-  } else {
-    // no spouse: direct lines
-    children.forEach(c => connectors.push(elbow(subject, c)));
-  }
-}
-
-/* -------- 4. Siblings (no parents) -------- */
-if (!parentIds.length && siblingIds.length > 1) {
-  const sibs = siblingIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-  const left = sibs[0], right = sibs[sibs.length - 1];
-  if (left && right) connectors.push(horizontal(midTop(left), midTop(right)));
-}
-
-
-  // ------ 7) Mount SVG and draw ------
-  const { svg, g } = mountSvg(el);
-  // Draw connectors
-  connectors.forEach(c => drawConnector(g, c));
-
-  // Draw nodes (cards)
-  nodes.forEach(n => drawCard(g, n, { cardW, cardH }));
-
-  // Auto-fit viewport
-  autofit(svg, nodes, { pad: 60 });
-}
-
-/* ================== Utilities ================== */
-
-function dedup(arr){ return [...new Set(arr)]; }
-function groupBy(arr, fn){
-  const m = Object.create(null);
-  arr.forEach(x => {
-    const k = fn(x);
-    (m[k]||(m[k]=[])).push(x);
   });
-  return m;
+
+  // --- 10) Draw cards (top layer) ---
+  nodes.forEach(n=>drawCard(gCards,n,{cardW,cardH}));
+
+  // --- 11) Fit view ---
+  autofit(svg,nodes,{pad:60});
 }
 
-function mountEmpty(el, msg){
-  el.innerHTML = `<div style="padding:1rem;color:#555">${msg}</div>`;
-}
+/* ================= Utilities ================= */
 
-function mountSvg(el) {
-  el.innerHTML = "";
+function dedup(a){return[...new Set(a)];}
+function groupBy(a,fn){const m={};a.forEach(x=>{const k=fn(x);(m[k]||(m[k]=[])).push(x);});return m;}
+function mountEmpty(el,msg){el.innerHTML=`<div style="padding:1rem;color:#555">${msg}</div>`;}
 
-  const svg = d3.select(el)
-    .append("svg")
-    .attr("class", "fcl-svg")
-    .attr("viewBox", `0 0 1200 800`)
-    .attr("preserveAspectRatio", "xMidYMid meet")
-    .style("cursor", "grab");
+function mountSvg(el){
+  el.innerHTML="";
+  const svg=d3.select(el).append("svg")
+    .attr("class","fcl-svg")
+    .attr("viewBox","0 0 1200 800")
+    .attr("preserveAspectRatio","xMidYMid meet")
+    .style("cursor","grab");
 
-  const g = svg.append("g");
-
-  // --- Enable zoom/pan ---
-  const zoomed = (event) => {
-    g.attr("transform", event.transform);
-  };
-
-  const zoom = d3.zoom()
-    .scaleExtent([0.3, 3])   // min / max zoom factors
-    .on("zoom", zoomed);
-
+  const g=svg.append("g");
+  const zoomed=e=>g.attr("transform",e.transform);
+  const zoom=d3.zoom().scaleExtent([0.3,3]).on("zoom",zoomed);
   svg.call(zoom);
+  svg.on("mousedown touchstart",()=>svg.style("cursor","grabbing"));
+  svg.on("mouseup touchend",()=>svg.style("cursor","grab"));
 
-  // Optional: change cursor on drag
-  svg.on("mousedown touchstart", () => svg.style("cursor", "grabbing"));
-  svg.on("mouseup touchend", () => svg.style("cursor", "grab"));
+  const gKin=g.append("g").attr("data-layer","kin");
+  const gSpouse=g.append("g").attr("data-layer","spouse");
+  const gCards=g.append("g").attr("data-layer","cards");
 
-  return { svg, g };
+  return{svg,g,gKin,gSpouse,gCards};
 }
 
-
-function midTop(n){ return { x:n.x, y:n.y - 32 }; }
-function midBottom(n){ return { x:n.x, y:n.y + 32 }; }
-function elbow(from, to){
-  // vertical elbow: down from parent, across, down/up to child
-  const midY = (from.y + to.y)/2;
-  return {
-    kind:"elbow",
-    d: `M ${from.x} ${from.y+32}
-        V ${midY}
-        H ${to.x}
-        V ${to.y-32}`
-  };
-}
-function horizontal(a, b){
-  return { kind:"marriage", d: `M ${a.x} ${a.y-10} H ${b.x}` };
-}
-function lineSegment(a, b, kind="marriage"){
-  return { kind, d: `M ${a.x} ${a.y+10} L ${b.x} ${b.y+10}` };
-}
-function drawConnector(g, seg){
-  g.append("path")
-    .attr("class", seg.kind==="marriage" ? "fcl-marriage" : "fcl-connector")
-    .attr("d", seg.d);
-}
-
-function drawCard(g, n, { cardW, cardH }) {
-  const grp = g.append("g")
-    .attr("transform", `translate(${n.x - cardW / 2}, ${n.y - cardH / 2})`);
-
-  // Draw outer card
-  grp.append("rect")
-    .attr("class", "fcl-card")
-    .attr("width", cardW)
-    .attr("height", cardH)
-    .attr("rx", 12)
-    .attr("ry", 12);
-
-  // Image area (square, cropped centre)
-  const imgSize = 80;
-  if (n.image) {
-    grp.append("image")
-      .attr("href", commonsThumb(n.image, 120))
-      .attr("x", 10)
-      .attr("y", (cardH - imgSize) / 2)
-      .attr("width", imgSize)
-      .attr("height", imgSize)
-      .attr("preserveAspectRatio", "xMidYTop slice")
-      .attr("clip-path", "inset(0 round 8px)");
+function drawCard(g,n,{cardW,cardH}){
+  const grp=g.append("g").attr("transform",`translate(${n.x-cardW/2},${n.y-cardH/2})`);
+  grp.append("rect").attr("class","fcl-card").attr("width",cardW).attr("height",cardH).attr("rx",12).attr("ry",12);
+  const imgSize=80;
+  if(n.image){
+    grp.append("image").attr("href",commonsThumb(n.image,120))
+      .attr("x",10).attr("y",(cardH-imgSize)/2)
+      .attr("width",imgSize).attr("height",imgSize)
+      .attr("preserveAspectRatio","xMidYTop slice").attr("clip-path","inset(0 round 8px)");
   }
-
-  // Text block to the right of image
-  const textX = n.image ? 10 + imgSize + 12 : 14;
-  const textY = cardH / 2 - 6;
-
-  const name = grp.append("text")
-    .attr("class", "fcl-name")
-    .attr("x", textX)
-    .attr("y", textY)
-    .text(n.name);
-
-  if (n.yrs) {
-    grp.append("text")
-      .attr("class", "fcl-years")
-      .attr("x", textX)
-      .attr("y", textY + 18)
-      .text(n.yrs);
+  const textX=n.image?10+imgSize+12:14;
+  const textY=cardH/2-6;
+  const name=grp.append("text").attr("class","fcl-name").attr("x",textX).attr("y",textY).text(n.name);
+  if(n.yrs){
+    grp.append("text").attr("class","fcl-years").attr("x",textX).attr("y",textY+18).text(n.yrs);
   }
-
-  // Clickable link (SNARC)
-  if (n.snarc) {
-    name.attr("class", "fcl-name fcl-link")
-      .style("text-decoration", "underline")
-      .on("click", () => {
-        const url = `https://jasonnlw.github.io/SNARC-explorer/#/item/${n.snarc}`;
-        window.top.location.href = url;
-      });
+  if(n.snarc){
+    name.attr("class","fcl-name fcl-link").style("text-decoration","underline")
+      .on("click",()=>{const url=`https://jasonnlw.github.io/SNARC-explorer/#/item/${n.snarc}`;window.top.location.href=url;});
   }
 }
-function commonsThumb(url, width = 200) {
-  if (!url) return "";
-  // Try to construct a proper thumbnail URL from Commons file paths
-  if (url.includes("Special:FilePath")) return `${url}?width=${width}`;
-  if (url.includes("upload.wikimedia.org")) return url; // already direct
+
+function commonsThumb(url,width=200){
+  if(!url)return"";
+  if(url.includes("Special:FilePath"))return`${url}?width=${width}`;
+  if(url.includes("upload.wikimedia.org"))return url;
   return url;
 }
 
-function autofit(svg, nodes, { pad = 40 } = {}) {
-  if (!nodes.length) return;
-  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
-  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
-  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
-  const w = Math.max(800, maxX - minX);
-  const h = Math.max(600, maxY - minY);
-  svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
-
-  // Initial center and scale
-  const svgNode = svg.node();
-  const { width, height } = svgNode.getBoundingClientRect();
-  const scale = Math.min(width / w, height / h);
-  const tx = (width - w * scale) / 2;
-  const ty = (height - h * scale) / 2;
-  const initialTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
-
-  svg.call(d3.zoom().transform, initialTransform);
+function autofit(svg,nodes,{pad=40}={}){
+  if(!nodes.length)return;
+  const xs=nodes.map(n=>n.x),ys=nodes.map(n=>n.y);
+  const minX=Math.min(...xs)-pad,maxX=Math.max(...xs)+pad;
+  const minY=Math.min(...ys)-pad,maxY=Math.max(...ys)+pad;
+  const w=Math.max(800,maxX-minX),h=Math.max(600,maxY-minY);
+  svg.attr("viewBox",`${minX} ${minY} ${w} ${h}`);
+  const svgNode=svg.node();
+  const {width,height}=svgNode.getBoundingClientRect();
+  const scale=Math.min(width/w,height/h);
+  const tx=(width-w*scale)/2,ty=(height-h*scale)/2;
+  const initial=d3.zoomIdentity.translate(tx,ty).scale(scale);
+  svg.call(d3.zoom().transform,initial);
 }
 
-
-// ---- D3 (required) must be available global as `d3`.
-if (typeof window !== "undefined" && !window.d3) {
-  console.error("Family Chart Lite: d3 not found. Include docs/js/d3.v7.min.js before this script.");
+if(typeof window!=="undefined"&&!window.d3){
+  console.error("Family Chart Lite: d3 not found. Include d3.v7.min.js before this script.");
 }
