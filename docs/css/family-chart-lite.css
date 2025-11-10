@@ -56,7 +56,10 @@ path[kind="ancestor"] {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+
 /* Smooth connector styling */
+.fcl-card { fill: inherit !important; }
 .fcl-kin { stroke: #9DA1A6; stroke-width: 3.5; fill: none; stroke-linecap: round; opacity: .95; }
 .fcl-spouse { stroke: #d93025; stroke-width: 3.5; fill: none; stroke-linecap: round; opacity: .95; }
 .fcl-junction { fill: #1a73e8; opacity: .35; }
