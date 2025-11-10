@@ -99,22 +99,26 @@ const relatedIds = dedup([...(parentIds || []), ...(spouseIds || []), ...(childI
 
 if (relatedIds.length) {
   const valuesRel = relatedIds.map(id => `wd:${id}`).join(" ");
-  const qCheck = `
-    SELECT ?person
-           (EXISTS { ?person wdt:P22|wdt:P25 ?p } AS ?hasParents)
-           (EXISTS { ?person wdt:P40 ?c } AS ?hasChildren)
-    WHERE { VALUES ?person { ${valuesRel} } }
-  `;
-  const jCheck = await sparql(qCheck);
-  jCheck.results.bindings.forEach(b => {
-    const id = qidFromIRI(b.person.value);
-    if (meta[id]) {
-  meta[id].hasParents  = Boolean(b.hasParents?.value && b.hasParents.value !== "false" && b.hasParents.value !== "0");
-  meta[id].hasChildren = Boolean(b.hasChildren?.value && b.hasChildren.value !== "false" && b.hasChildren.value !== "0");
-    }
-  });
+const qCheck = `
+SELECT ?person ?hasParents ?hasChildren WHERE {
+  VALUES ?person { ${valuesRel} }
+  OPTIONAL {
+    { ?person wdt:P22|wdt:P25 ?p. BIND(true AS ?hasParents) }
+  }
+  OPTIONAL {
+    { ?person wdt:P40 ?c. BIND(true AS ?hasChildren) }
+  }
 }
-
+`;
+const jCheck = await sparql(qCheck);
+jCheck.results.bindings.forEach(b => {
+  const id = qidFromIRI(b.person.value);
+  if (meta[id]) {
+    meta[id].hasParents  = b.hasParents && b.hasParents.value ? true : false;
+    meta[id].hasChildren = b.hasChildren && b.hasChildren.value ? true : false;
+  }
+});
+}
 
   // ---------- 4) parents of each child ----------
   let childParents = Object.create(null);
