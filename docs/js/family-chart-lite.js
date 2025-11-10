@@ -219,7 +219,6 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
 
   // ------ 6) Build connectors ------
 
-  // ------ 6) Build connectors ------
   const connectors = [];
 
   // Base geometry
@@ -342,6 +341,7 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   connectors.forEach(c => drawConnector(g, c));
   nodes.forEach(n => drawCard(g, n, { cardW, cardH }));
   autofit(svg, nodes, { pad: 60 });
+}
 
 
 
