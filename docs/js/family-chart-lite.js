@@ -161,6 +161,34 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
       image: b.image?.value || null
     };
   });
+  // ------ 3b) Fetch parent facts (P22/P25) for routing connectors ------
+  // We want real parentage for subject, spouses, parents, children, grandchildren, siblings.
+  const idsNeedingParents = dedup([
+    subjId,
+    ...spouseIds,
+    ...parentIds,
+    ...childIds,
+    ...grandchildIds,
+    ...siblingIds
+  ]);
+
+  const valuesParents = idsNeedingParents.map(id => `wd:${id}`).join(" ");
+  const qParents = `
+SELECT ?who ?father ?mother WHERE {
+  VALUES ?who { ${valuesParents} }
+  OPTIONAL { ?who wdt:P22 ?father. }
+  OPTIONAL { ?who wdt:P25 ?mother. }
+}`;
+  const jParents = await sparql(qParents);
+
+  const parentsOf = Object.create(null); // parentsOf[id] = { father: 'Q..'|null, mother: 'Q..'|null }
+  idsNeedingParents.forEach(id => { parentsOf[id] = { father: null, mother: null }; });
+  jParents.results.bindings.forEach(b => {
+    const id = qidFromIRI(b.who.value);
+    if (!parentsOf[id]) parentsOf[id] = { father: null, mother: null };
+    if (b.father) parentsOf[id].father = qidFromIRI(b.father.value);
+    if (b.mother) parentsOf[id].mother = qidFromIRI(b.mother.value);
+  });
 
   // ------ 4) Build nodes with layout lanes (vertical) ------
   // Lanes: -2 grandparents, -1 parents, 0 center (spouses left, subject, siblings right), +1 children, +2 grandchildren
@@ -218,123 +246,195 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
   });
 
   // ------ 6) Build connectors ------
-
   const connectors = [];
 
-  // Base geometry
-  const cardHalfH = cardH / 2;
-  const verticalGap = 40; // gap between card bottom and connector junction
+  // Geometry helpers based on real card dimensions
+  const halfH = cardH / 2;
+  const topY      = (n) => n.y - halfH;
+  const bottomY   = (n) => n.y + halfH;
+  const midX      = (a, b) => (a.x + b.x) / 2;
+  const barBelow  = (n, offset = 16) => bottomY(n) + offset;
+  const barAbove  = (n, offset = 16) => topY(n)    - offset;
 
-  // Marriage connectors (subject ↔ spouses)
-  const marriageJunctions = [];
-  spouseIds.forEach(sp => {
-    const a = nodes.find(n => n.id === subjId);
-    const b = nodes.find(n => n.id === sp);
-    if (a && b) {
-      const midX = (a.x + b.x) / 2;
-      const y = a.y + cardHalfH + verticalGap / 2;
+  // Draw a horizontal bar between two nodes at y, with short down-stems from each parent
+  function coupleUnionBar(nA, nB, y) {
+    const leftX  = Math.min(nA.x, nB.x);
+    const rightX = Math.max(nA.x, nB.x);
+    return [
+      { kind: "parent-link", d: `M ${nA.x} ${bottomY(nA)} V ${y}` },
+      { kind: "parent-link", d: `M ${nB.x} ${bottomY(nB)} V ${y}` },
+      { kind: "union",       d: `M ${leftX} ${y} H ${rightX}` }
+    ];
+  }
 
-      // marriage bar
-      connectors.push({
-        kind: "marriage",
-        d: `M ${a.x} ${y} H ${b.x}`
+  // Draw child drop from a junction at (jx, jy) to the top of child card
+  function dropToChild(jx, jy, child) {
+    const top = topY(child);
+    return { kind: "child", d: `M ${jx} ${jy} V ${top - 6} H ${child.x} V ${top}` };
+  }
+
+  // Find node by id quickly
+  const byId = Object.create(null);
+  nodes.forEach(n => { byId[n.id] = n; });
+
+  // --------- 6a) Ancestor block: Grandparents -> Parents (lane -2 to -1) ----------
+  // For each parent, if their father/mother exist in nodes, make a couple union (if both) or single-parent drop.
+  parentIds.forEach(pid => {
+    const parentNode = byId[pid];
+    if (!parentNode) return;
+
+    const pf = parentsOf[pid]?.father ? byId[parentsOf[pid].father] : null;
+    const pm = parentsOf[pid]?.mother ? byId[parentsOf[pid].mother] : null;
+
+    if (pf && pm) {
+      const y = barBelow(pf) + 8;                       // union bar just below grandparents
+      connectors.push(...coupleUnionBar(pf, pm, y));
+      connectors.push({                                   // drop to this parent
+        kind: "ancestor",
+        d: `M ${midX(pf, pm)} ${y} V ${topY(parentNode)}`
       });
-
-      // junction for children of this marriage
-      marriageJunctions.push({ x: midX, y: y + 6 });
+    } else if (pf || pm) {
+      const p = pf || pm;
+      connectors.push({
+        kind: "ancestor",
+        d: `M ${p.x} ${bottomY(p)} V ${topY(parentNode)}`
+      });
     }
   });
 
-  // Parent → child connectors
-  const parents = parentIds.map(pid => nodes.find(n => n.id === pid)).filter(Boolean);
-  const children = childIds.map(cid => nodes.find(n => n.id === cid)).filter(Boolean);
+  // --------- 6b) Parents -> Subject + Siblings (lane -1 to 0) ----------
+  // If both subject parents exist, draw a shared union bar and drop to all children of that couple
+  const fNode = fatherId ? byId[fatherId] : null;
+  const mNode = motherId ? byId[motherId] : null;
 
-  if (children.length) {
-    if (parents.length === 2) {
-      const [p1, p2] = parents;
-      const unionY = Math.max(p1.y, p2.y) + cardHalfH + 20;
-      const barLeft = Math.min(p1.x, p2.x);
-      const barRight = Math.max(p1.x, p2.x);
-      const barMid = (barLeft + barRight) / 2;
+  const sibNodes = siblingIds.map(id => byId[id]).filter(Boolean);
+  const subjectNode = byId[subjId];
 
-      // down from each parent
-      connectors.push({
-        kind: "parent-link",
-        d: `M ${p1.x} ${p1.y + cardHalfH} V ${unionY}
-            M ${p2.x} ${p2.y + cardHalfH} V ${unionY}
-            M ${barLeft} ${unionY} H ${barRight}`
-      });
+  if (fNode && mNode) {
+    const y = barBelow(fNode) + 8;                       // union bar just below parents
+    connectors.push(...coupleUnionBar(fNode, mNode, y));
 
-      // down to each child
-      children.forEach(ch => {
-        connectors.push({
-          kind: "child",
-          d: `M ${barMid} ${unionY} V ${ch.y - cardHalfH - 20}
-              H ${ch.x}
-              V ${ch.y - cardHalfH}`
-        });
-      });
-    } else if (parents.length === 1) {
-      const p = parents[0];
-      children.forEach(ch => {
-        connectors.push({
-          kind: "child",
-          d: `M ${p.x} ${p.y + cardHalfH} V ${ch.y - cardHalfH}`
-        });
-      });
-    } else {
-      // no parents, children of subject
-      const p = nodes.find(n => n.id === subjId);
-      if (p) {
-        children.forEach(ch => {
-          connectors.push({
-            kind: "child",
-            d: `M ${p.x} ${p.y + cardHalfH} V ${ch.y - cardHalfH}`
-          });
-        });
+    // children of THIS couple on lane 0 (subject + those siblings that also share these two parents)
+    const lane0kids = [subjectNode, ...sibNodes].filter(n => {
+      const p = parentsOf[n.id] || {};
+      return p.father === fatherId && p.mother === motherId;
+    });
+
+    lane0kids.forEach(ch => {
+      connectors.push({ kind: "child", d: `M ${midX(fNode, mNode)} ${y} V ${topY(ch)}` });
+    });
+
+    // If some siblings exist but are NOT of the same two parents, connect them from whichever parent is known
+    const oddSibs = sibNodes.filter(n => !lane0kids.includes(n));
+    oddSibs.forEach(n => {
+      const p = parentsOf[n.id] || {};
+      const fp = p.father && byId[p.father];
+      const mp = p.mother && byId[p.mother];
+      if (fp && mp) {
+        const y2 = barBelow(fp) + 8;
+        connectors.push(...coupleUnionBar(fp, mp, y2));
+        connectors.push({ kind: "child", d: `M ${midX(fp, mp)} ${y2} V ${topY(n)}` });
+      } else if (fp || mp) {
+        const one = fp || mp;
+        connectors.push({ kind: "child", d: `M ${one.x} ${bottomY(one)} V ${topY(n)}` });
       }
-    }
-  }
+    });
 
-  // Sibling bar if no parents
-  if (!parentIds.length && siblingIds.length > 1) {
-    const sibs = siblingIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-    const left = sibs[0], right = sibs[sibs.length - 1];
-    if (left && right) {
-      const y = left.y - cardHalfH - 10;
-      connectors.push({
-        kind: "sibling",
-        d: `M ${left.x - 60} ${y} H ${right.x + 60}`
-      });
-    }
-  }
+  } else if (fNode || mNode) {
+    // Single known parent to subject and siblings
+    const p = fNode || mNode;
+    [subjectNode, ...sibNodes].forEach(n => {
+      connectors.push({ kind: "child", d: `M ${p.x} ${bottomY(p)} V ${topY(n)}` });
+    });
 
-  // Grandparent → parent
-  const grandparents = grandparentIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-  if (grandparents.length && parents.length) {
-    const unionY = Math.min(...parents.map(p => p.y)) - verticalGap;
-    grandparents.forEach(gp => {
-      parents.forEach(pr => {
-        connectors.push({
-          kind: "ancestor",
-          d: `M ${gp.x} ${gp.y + cardHalfH} V ${unionY}
-              H ${pr.x} V ${pr.y - cardHalfH}`
-        });
-      });
+  } else if (sibNodes.length > 0) {
+    // No parents known: draw a sibling bar above siblings+subject
+    const allLane0 = [subjectNode, ...sibNodes].sort((a,b) => a.x - b.x);
+    const left = allLane0[0], right = allLane0[allLane0.length - 1];
+    const y = barAbove(subjectNode, 14);
+    connectors.push({ kind: "sibling", d: `M ${left.x - 40} ${y} H ${right.x + 40}` });
+    allLane0.forEach(n => {
+      connectors.push({ kind: "sibling", d: `M ${n.x} ${y} V ${topY(n)}` });
     });
   }
 
-  // Grandparent/descendant fallback (if no parents)
-  const grandchildren = grandchildIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-  if (grandchildren.length && !children.length) {
-    const subj = nodes.find(n => n.id === subjId);
-    grandchildren.forEach(gc => {
-      connectors.push({
-        kind: "descendant",
-        d: `M ${subj.x} ${subj.y + cardHalfH} V ${gc.y - cardHalfH}`
-      });
-    });
-  }
+  // --------- 6c) Subject & spouses (lane 0) ----------
+  // Draw marriage bars; we’ll store their junction (midpoint) to attach the correct children.
+  const spouseNodes = spouseIds.map(id => byId[id]).filter(Boolean);
+  const marriageHubs = []; // {parents:[idA,idB], x, y}
+
+  spouseNodes.forEach(sp => {
+    if (!subjectNode || !sp) return;
+    const y = Math.max(bottomY(subjectNode), bottomY(sp)) + 12;
+    connectors.push({ kind: "marriage", d: `M ${subjectNode.x} ${y} H ${sp.x}` });
+    marriageHubs.push({ parents: [subjId, sp.id], x: midX(subjectNode, sp), y });
+  });
+
+  // --------- 6d) Children (lane +1) ----------
+  // Route each child from the correct parents:
+  // - If both of a child's parents are present and match one marriage hub, drop from that hub
+  // - Else if one parent is present, drop from that parent
+  // - Else fallback from subject
+  const childNodes = childIds.map(id => byId[id]).filter(Boolean);
+
+  childNodes.forEach(ch => {
+    const p = parentsOf[ch.id] || {};
+    const fp = p.father && byId[p.father];
+    const mp = p.mother && byId[p.mother];
+
+    // Try to match a marriage hub
+    let hub = null;
+    if (fp && mp) {
+      hub = marriageHubs.find(h =>
+        (h.parents.includes(fp.id) && h.parents.includes(mp.id))
+      );
+    } else if (fp && fp.id === subjId) {
+      const sp2 = mp ? mp.id : null;
+      hub = marriageHubs.find(h => h.parents.includes(subjId) && (sp2 ? h.parents.includes(sp2) : false));
+    } else if (mp && mp.id === subjId) {
+      const sp2 = fp ? fp.id : null;
+      hub = marriageHubs.find(h => h.parents.includes(subjId) && (sp2 ? h.parents.includes(sp2) : false));
+    }
+
+    if (hub) {
+      connectors.push(dropToChild(hub.x, hub.y, ch));
+    } else if (fp || mp) {
+      const one = fp || mp;
+      connectors.push({ kind: "child", d: `M ${one.x} ${bottomY(one)} V ${topY(ch)}` });
+    } else if (subjectNode) {
+      connectors.push({ kind: "child", d: `M ${subjectNode.x} ${bottomY(subjectNode)} V ${topY(ch)}` });
+    }
+  });
+
+  // --------- 6e) Grandchildren (lane +2) ----------
+  // Attach grandchildren to their real parents in lane +1 where possible; otherwise route via subject’s child, else subject.
+  const grandchildNodes = grandchildIds.map(id => byId[id]).filter(Boolean);
+
+  grandchildNodes.forEach(gc => {
+    const p = parentsOf[gc.id] || {};
+    const fp = p.father && byId[p.father];
+    const mp = p.mother && byId[p.mother];
+
+    // Prefer a lane +1 parent node if present
+    const lane1Parent = [fp, mp].find(pp => pp && pp.lane === +1);
+    if (lane1Parent) {
+      connectors.push({ kind: "descendant", d: `M ${lane1Parent.x} ${bottomY(lane1Parent)} V ${topY(gc)}` });
+      return;
+    }
+
+    // Else, if one of the parents is the subject’s child and present, connect from that
+    const viaChild = [fp, mp].find(pp => pp && childIds.includes(pp.id));
+    if (viaChild) {
+      connectors.push({ kind: "descendant", d: `M ${viaChild.x} ${bottomY(viaChild)} V ${topY(gc)}` });
+      return;
+    }
+
+    // Fallback
+    if (subjectNode) {
+      connectors.push({ kind: "descendant", d: `M ${subjectNode.x} ${bottomY(subjectNode)} V ${topY(gc)}` });
+    }
+  });
+
 
   // --- Draw phase ---
   const { svg, g } = mountSvg(el);
@@ -349,24 +449,24 @@ SELECT ?e ?eLabel ?dob ?dod ?snarc ?image WHERE {
 
 function drawConnector(g, seg) {
   const colorMap = {
-    marriage: "#333",
-    union: "#444",
-    child: "#444",
-    ancestor: "#444",
+    marriage:   "#333",
+    union:      "#444",
+    "parent-link":" #444",
+    child:      "#444",
+    ancestor:   "#444",
     descendant: "#444",
-    sibling: "#666"
+    sibling:    "#666"
   };
   const widthMap = {
-    marriage: 2.5,
-    union: 2.2,
-    child: 2.2,
-    ancestor: 2.2,
+    marriage:   2.6,
+    union:      2.2,
+    "parent-link": 2.2,
+    child:      2.2,
+    ancestor:   2.2,
     descendant: 2.2,
-    sibling: 2
+    sibling:    2
   };
-  const dashMap = {
-    sibling: "4 2"
-  };
+  const dashMap = { sibling: "4 2" };
 
   const path = g.append("path")
     .attr("d", seg.d)
