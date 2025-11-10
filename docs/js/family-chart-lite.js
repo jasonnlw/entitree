@@ -308,7 +308,6 @@ SELECT ?who ?father ?mother WHERE {
   const mNode = motherId ? byId[motherId] : null;
 
   const sibNodes = siblingIds.map(id => byId[id]).filter(Boolean);
-  const subjectNode = byId[subjId];
 
   if (fNode && mNode) {
     const y = barBelow(fNode) + 8;                       // union bar just below parents
