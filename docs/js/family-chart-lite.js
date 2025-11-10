@@ -1,9 +1,8 @@
-// Family Chart Lite – Smooth Junctions v2.1
-// Fixes:
-// - Parents→(subject + siblings): always fan from a single junction to *each* child on the centre row
-// - Removes mixed logic that drew a separate subject-only drop
-// - Keeps high marriage arches and per‑spouse children fans
-// Requires: d3 v7+
+// Family Chart Lite – Smooth Junctions v2.2
+// Changes from v2.1:
+// - Replace horizontal bars with direct smooth fan curves from junctions to EACH child
+// - Ensure connector layers are cleared before (re)draw to avoid any stale lines
+// - Marriage arches unchanged (already good)
 
 export async function drawFamilyTree(el, qid, opts = {}) {
   const langPref = (opts.lang === "cy" ? "cy,en" : "en,cy");
@@ -147,9 +146,12 @@ SELECT ?c ?father ?mother WHERE {
   // ---------- 7) svg layers ----------
   const { svg, g, gKin, gSpouse, gCards } = mountSvg(el);
 
+  // Clear connector layers in case of re-render
+  gKin.selectAll("*").remove();
+  gSpouse.selectAll("*").remove();
+
   // ---------- 8) path helpers ----------
   const PARENT_LIFT = 26;
-  const CHILD_BAR_PAD = 60;
   const ARCH_LIFT = 100;
   const ARCH_TIGHT = 0.25;
 
@@ -179,7 +181,7 @@ SELECT ?c ?father ?mother WHERE {
     drawPath(gSpouse, marriageArch(center(a), center(b)), "fcl-spouse");
   });
 
-  // 9b) Parents → (subject + siblings): always fan to EACH child on centre row
+  // 9b) Parents → (subject + siblings): smooth fan directly to each mid-row child
   (function() {
     const parentNodes = [fatherId, motherId]
       .map(id => id ? nodes.find(n => n.id === id) : null)
@@ -194,24 +196,19 @@ SELECT ?c ?father ?mother WHERE {
     const jx = parentNodes.reduce((s,p)=>s+p.x,0) / parentNodes.length;
     const jy = parentsBottomY + (groupTopY - parentsBottomY) * 0.45;
 
+    // inbound curves: parents -> junction
     parentNodes.forEach(p => {
       drawPath(gKin, vCurve({ x: p.x, y: p.y + PARENT_LIFT }, { x: jx, y: jy }), "fcl-kin");
     });
     dot(gKin, jx, jy);
 
-    const barY = Math.min(...midRowChildren.map(c => c.y)) - CHILD_BAR_PAD;
-    drawPath(gKin, vCurve({ x: jx, y: jy }, { x: jx, y: barY }), "fcl-kin");
-
-    const leftX  = Math.min(...midRowChildren.map(c => c.x));
-    const rightX = Math.max(...midRowChildren.map(c => c.x));
-    drawPath(gKin, `M ${leftX} ${barY} H ${rightX}`, "fcl-kin");
-
+    // direct smooth curves from junction to EACH mid-row child
     midRowChildren.forEach(c => {
-      drawPath(gKin, vCurve({ x: c.x, y: barY }, { x: c.x, y: c.y - 32 }), "fcl-kin");
+      drawPath(gKin, vCurve({ x: jx, y: jy }, { x: c.x, y: c.y - 32 }), "fcl-kin");
     });
   })();
 
-  // 9c) Subject(+spouses) → children (per spouse group, smooth fan)
+  // 9c) Subject(+spouses) → children: per-spouse junction, then direct smooth curves to EACH child
   (function () {
     const subject = nodes.find(n => n.id === subjId);
     if (!subject || !childIds.length) return;
@@ -243,14 +240,9 @@ SELECT ?c ?father ?mother WHERE {
       });
       dot(gKin, jx, jy);
 
-      const barY = Math.min(...kids.map(k => k.y)) - CHILD_BAR_PAD;
-      drawPath(gKin, vCurve({ x: jx, y: jy }, { x: jx, y: barY }), "fcl-kin");
-
-      const leftX  = Math.min(...kids.map(k => k.x));
-      const rightX = Math.max(...kids.map(k => k.x));
-      drawPath(gKin, `M ${leftX} ${barY} H ${rightX}`, "fcl-kin");
+      // direct curves from junction to each child
       kids.forEach(k => {
-        drawPath(gKin, vCurve({ x: k.x, y: barY }, { x: k.x, y: k.y - 32 }), "fcl-kin");
+        drawPath(gKin, vCurve({ x: jx, y: jy }, { x: k.x, y: k.y - 32 }), "fcl-kin");
       });
     });
   })();
