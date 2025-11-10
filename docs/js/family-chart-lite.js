@@ -313,7 +313,7 @@ function drawCard(g, n, { cardW, cardH }){
     .attr("height", cardH)
     .attr("rx", 12)
     .attr("ry", 12)
-    .attr("fill", fillColor)
+    .style("fill", fillColor)
     .attr("stroke", "#ddd")
     .attr("stroke-width", 1);
 
