@@ -314,6 +314,15 @@ positionNodes(); // initial placement
   // ---------- 10) draw cards ----------
   nodes.forEach(n => drawCard(gCards, n, { cardW, cardH }));
 
+  // DEBUG: inspect plus logic
+console.log("DEBUG nodes summary ↓↓↓");
+console.table(nodes.map(n => ({
+  id: n.id,
+  eligiblePlus: n.eligiblePlus,
+  hasParents: n.hasParents,
+  hasChildren: n.hasChildren
+})));
+
   // ---------- 11) fit view ----------
   autofit(svg, nodes, { pad: 60 });
 
