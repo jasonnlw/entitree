@@ -440,11 +440,11 @@ function drawCard(g, n, { cardW, cardH }){
   // if they have additional generations available.
   if (n.eligiblePlus && (n.hasParents || n.hasChildren)) {
     grp.append("text")
-      .attr("x", cardW - 20)
-      .attr("y", 22)
+      .attr("x", cardW - 30)
+      .attr("y", 34)
       .attr("class", "fcl-plus")
       .attr("text-anchor", "middle")
-      .attr("font-size", 25)
+      .attr("font-size", 28)
       .attr("cursor", "pointer")
       .text("➲")
       .on("click", () => {
