@@ -77,13 +77,16 @@ path[kind="ancestor"] {
 
 /* === Expansion Symbol (⊕) === */
 .fcl-plus {
-  fill: red !important;       /* temporary bright colour for debugging */
-  font-size: 20px !important;
-  font-weight: bold;
+  fill: #272729;
+  font-weight: 600;
+  font-size: 18px;
   user-select: none;
-  opacity: 1 !important;
+  transition: transform 0.2s ease, fill 0.2s ease, opacity 0.3s ease;
+  opacity: 0.6;
 }
 .fcl-plus:hover {
-  fill: #0b57d0;
+  fill: #1a73e8;
+  transform: scale(1.4);
+  opacity: 1;
 }
 
