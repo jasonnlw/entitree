@@ -164,134 +164,80 @@ j3.results.bindings.forEach(b => {
   });
 
   // ------ 6) Build connectors ------
-  const connectors = [];
-  // Marriage lines: subject to each spouse
-  spouseIds.forEach(sp => {
-    const a = nodes.find(n=>n.id===subjId), b = nodes.find(n=>n.id===sp);
-    if (a && b) connectors.push(lineSegment(midBottom(a), midBottom(b), "marriage"));
-  });
+const connectors = [];
 
-  // --- Parent/child connectors ---
-function joinParentsToChildren(fatherId, motherId, childIds) {
-  if (!childIds.length) return;
-
+/* -------- 1. Parents → Subject -------- */
+if (fatherId && motherId) {
   const father = nodes.find(n => n.id === fatherId);
   const mother = nodes.find(n => n.id === motherId);
-
-  // Case 1: both parents known
-  if (father && mother) {
+  const subject = nodes.find(n => n.id === subjId);
+  if (father && mother && subject) {
     const midX = (father.x + mother.x) / 2;
-    const topY = Math.min(father.y, mother.y) + 40;
-
-    // horizontal line between parents
-    connectors.push({
-      kind: "connector",
-      d: `M ${father.x} ${father.y+32} H ${mother.x}`
-    });
-
-    // vertical from midpoint down to junction
-    connectors.push({
-      kind: "connector",
-      d: `M ${midX} ${father.y+32} V ${father.y+80}`
-    });
-
-    const junctionY = father.y + 80;
-    if (childIds.length === 1) {
-      const c = nodes.find(n => n.id === childIds[0]);
-      connectors.push({
-        kind: "connector",
-        d: `M ${midX} ${junctionY} V ${c.y-32}`
-      });
-    } else {
-      // horizontal bar above children
-      const children = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-      const left = Math.min(...children.map(c => c.x));
-      const right = Math.max(...children.map(c => c.x));
-      connectors.push({
-        kind: "connector",
-        d: `M ${left} ${children[0].y-60} H ${right}`
-      });
-      children.forEach(c => {
-        connectors.push({
-          kind: "connector",
-          d: `M ${c.x} ${children[0].y-60} V ${c.y-32}`
-        });
-      });
-      // vertical down from parents to that horizontal
-      connectors.push({
-        kind: "connector",
-        d: `M ${midX} ${junctionY} V ${children[0].y-60}`
-      });
-    }
+    const topY = father.y + 32;
+    // join parents
+    connectors.push({ kind: "connector", d: `M ${father.x} ${topY} H ${mother.x}` });
+    // vertical from midpoint to subject
+    connectors.push({ kind: "connector", d: `M ${midX} ${topY} V ${subject.y - 32}` });
   }
-
-  // Case 2: single known parent
-  else {
-    const parent = father || mother;
-    if (!parent) return;
-    childIds.forEach(cid => {
-      const c = nodes.find(n => n.id === cid);
-      if (c) connectors.push(elbow(parent, c));
-    });
-  }
+} else {
+  // single parent fallback
+  const p = nodes.find(n => n.id === (fatherId || motherId));
+  const subject = nodes.find(n => n.id === subjId);
+  if (p && subject) connectors.push(elbow(p, subject));
 }
-joinParentsToChildren(fatherId, motherId, childIds);
 
-  // --- Subject’s own spouse–children junctions ---
+/* -------- 2. Subject ↔ Spouses -------- */
 spouseIds.forEach(spId => {
-  const spouse = nodes.find(n => n.id === spId);
-  const spChildren = childIds; // TODO: ideally filter by actual motherId if known
-
-  if (spouse && spChildren.length) {
-    const midX = (subjectNode.x + spouse.x) / 2;
-    const topY = subjectNode.y + 32;
-
-    // marriage line
-    connectors.push({
-      kind: "marriage",
-      d: `M ${subjectNode.x} ${topY} H ${spouse.x}`
-    });
-
-    // down from midpoint
-    connectors.push({
-      kind: "connector",
-      d: `M ${midX} ${topY} V ${topY + 40}`
-    });
-
-    const junctionY = topY + 40;
-    if (spChildren.length === 1) {
-      const c = nodes.find(n => n.id === spChildren[0]);
-      if (c) connectors.push({
-        kind: "connector",
-        d: `M ${midX} ${junctionY} V ${c.y - 32}`
-      });
-    } else {
-      const kids = spChildren.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-      const left = Math.min(...kids.map(k => k.x));
-      const right = Math.max(...kids.map(k => k.x));
-      connectors.push({
-        kind: "connector",
-        d: `M ${left} ${kids[0].y - 60} H ${right}`
-      });
-      kids.forEach(k => connectors.push({
-        kind: "connector",
-        d: `M ${k.x} ${kids[0].y - 60} V ${k.y - 32}`
-      }));
-      connectors.push({
-        kind: "connector",
-        d: `M ${midX} ${junctionY} V ${kids[0].y - 60}`
-      });
-    }
-  }
+  const sp = nodes.find(n => n.id === spId);
+  const subject = nodes.find(n => n.id === subjId);
+  if (!sp || !subject) return;
+  connectors.push({ kind: "marriage", d: `M ${subject.x} ${subject.y + 32} H ${sp.x}` });
 });
 
+/* -------- 3. Subject(+spouse) → Children -------- */
+if (childIds.length) {
+  const subject = nodes.find(n => n.id === subjId);
+  const spouses = spouseIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+  const children = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
 
-  // Sibling “sibling bar” (single line across siblings when no parents)
-  if (!parentIds.length && siblingIds.length > 1) {
-    const sibs = siblingIds.map(id => nodes.find(n=>n.id===id)).filter(Boolean);
-    const left = sibs[0], right = sibs[sibs.length-1];
-    if (left && right) connectors.push(horizontal(midTop(left), midTop(right)));
+  if (spouses.length) {
+    // create a junction for each spouse
+    spouses.forEach(sp => {
+      const midX = (sp.x + subject.x) / 2;
+      const topY = subject.y + 32;
+      const juncY = topY + 40;
+
+      // vertical from couple to junction
+      connectors.push({ kind: "connector", d: `M ${midX} ${topY} V ${juncY}` });
+
+      // children spread
+      if (children.length === 1) {
+        const c = children[0];
+        connectors.push({ kind: "connector", d: `M ${midX} ${juncY} V ${c.y - 32}` });
+      } else {
+        const left = Math.min(...children.map(c => c.x));
+        const right = Math.max(...children.map(c => c.x));
+        const barY = children[0].y - 60;
+        connectors.push({ kind: "connector", d: `M ${midX} ${juncY} V ${barY}` });
+        connectors.push({ kind: "connector", d: `M ${left} ${barY} H ${right}` });
+        children.forEach(c => {
+          connectors.push({ kind: "connector", d: `M ${c.x} ${barY} V ${c.y - 32}` });
+        });
+      }
+    });
+  } else {
+    // no spouse: direct lines
+    children.forEach(c => connectors.push(elbow(subject, c)));
   }
+}
+
+/* -------- 4. Siblings (no parents) -------- */
+if (!parentIds.length && siblingIds.length > 1) {
+  const sibs = siblingIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+  const left = sibs[0], right = sibs[sibs.length - 1];
+  if (left && right) connectors.push(horizontal(midTop(left), midTop(right)));
+}
+
 
   // ------ 7) Mount SVG and draw ------
   const { svg, g } = mountSvg(el);
