@@ -163,6 +163,34 @@ j3.results.bindings.forEach(b => {
     n.y = laneY(n.lane);
   });
 
+/* -------- Adjust parent positions above their children -------- */
+if (parentIds.length) {
+  const father = nodes.find(n => n.id === fatherId);
+  const mother = nodes.find(n => n.id === motherId);
+  const children = [subjId, ...siblingIds]
+    .map(id => nodes.find(n => n.id === id))
+    .filter(Boolean);
+
+  if ((father || mother) && children.length) {
+    // find horizontal midpoint of all children
+    const avgX =
+      children.reduce((sum, c) => sum + c.x, 0) / children.length;
+
+    // distance between parents (if both)
+    const parentGap = 180;
+
+    if (father && mother) {
+      father.x = avgX - parentGap / 2;
+      mother.x = avgX + parentGap / 2;
+    } else if (father) {
+      father.x = avgX;
+    } else if (mother) {
+      mother.x = avgX;
+    }
+  }
+}
+  
+
   // ------ 6) Build connectors ------
 const connectors = [];
 
