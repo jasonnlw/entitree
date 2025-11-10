@@ -79,7 +79,7 @@ path[kind="ancestor"] {
 .fcl-plus {
   fill: #272729;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 28px;
   user-select: none;
   transition: transform 0.2s ease, fill 0.2s ease, opacity 0.3s ease;
   opacity: 0.6;
