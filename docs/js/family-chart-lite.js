@@ -130,19 +130,15 @@ SELECT ?c ?father ?mother WHERE {
   siblingIds.forEach((id, i) => addNode(id, 0, +(i + 1))); // siblings right
   childIds.forEach((id, i) => addNode(id, +1, i));          // children
 
-  // ---------- 6) coordinates ----------
-  const rowH = 180, colW = 260, gapX = 30;
-  const lanes = groupBy(nodes, n => n.lane);
-  Object.keys(lanes).forEach(k => lanes[k].sort((a,b)=>a.order-b.order));
-  Object.keys(lanes).forEach(k => lanes[k].forEach((n, i) => n.xi = i));
-  const subjectNode = nodes.find(n => n.id === subjId);
-  const centerXi = subjectNode ? subjectNode.xi : 0;
-  const cardW = 220, cardH = 100;
-  const laneY = (lane) => (lane + 1) * rowH;
-  const centerX = 600;
-  const cardW = 220, cardH = 100;
+
+  // ---------- 6) coordinates (center-aligned rows) ----------
+const rowH = 180, colW = 260, gapX = 30;
+const cardW = 220, cardH = 100;
 const laneY = (lane) => (lane + 1) * rowH;
 const centerX = 600;
+
+const lanes = groupBy(nodes, n => n.lane);
+Object.keys(lanes).forEach(k => lanes[k].sort((a, b) => a.order - b.order));
 
 // For each lane (generation), compute its width and center-align its members
 Object.entries(lanes).forEach(([laneKey, laneNodes]) => {
