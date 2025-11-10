@@ -174,86 +174,81 @@ SELECT ?c ?father ?mother WHERE {
   function drawPath(g,d,klass){
     g.append("path").attr("class",klass).attr("d",d);
   }
-function marriageArch(a, b, lift = 60) {
-  const midX = (a.x + b.x) / 2;
-  const topY = Math.min(a.y, b.y) - lift;
-  return `M ${a.x} ${a.y} C ${midX} ${topY}, ${midX} ${topY}, ${b.x} ${b.y}`;
-}
+  function marriageArch(a, b, lift = 60) {
+    const midX = (a.x + b.x) / 2;
+    const topY = Math.min(a.y, b.y) - lift;
+    return `M ${a.x} ${a.y} C ${midX} ${topY}, ${midX} ${topY}, ${b.x} ${b.y}`;
+  }
 
-// Draws one shared stem and fan of connectors from `parents` to `children`
-function drawFan(g, parents, children, colorClass = "fcl-kin") {
-  if (!parents.length || !children.length) return;
+  // Draws one shared stem and fan of connectors from `parents` to `children`
+  function drawFan(g, parents, children, colorClass = "fcl-kin") {
+    if (!parents.length || !children.length) return;
 
-  const topY = Math.min(...parents.map(p => p.y)) + 32;
-  const baseX = parents.reduce((sum, p) => sum + p.x, 0) / parents.length;
+    const topY = Math.min(...parents.map(p => p.y)) + 32;
+    const baseX = parents.reduce((sum, p) => sum + p.x, 0) / parents.length;
 
-  // vertical down from parents to junction
-  const junctionY = topY + 40;
-  g.append("path")
-    .attr("class", colorClass)
-    .attr("d", `M ${baseX} ${topY} V ${junctionY}`);
-
-  // horizontal bar connecting children
-  const leftX = Math.min(...children.map(c => c.x));
-  const rightX = Math.max(...children.map(c => c.x));
-  const barY = children[0].y - 60;
-  g.append("path")
-    .attr("class", colorClass)
-    .attr("d", `M ${leftX} ${barY} H ${rightX}`);
-
-  // vertical from junction to horizontal bar
-  g.append("path")
-    .attr("class", colorClass)
-    .attr("d", `M ${baseX} ${junctionY} V ${barY}`);
-
-  // vertical drops to each child
-  children.forEach(c => {
+    // vertical down from parents to junction
+    const junctionY = topY + 40;
     g.append("path")
       .attr("class", colorClass)
-      .attr("d", `M ${c.x} ${barY} V ${c.y - 32}`);
-  });
-}
+      .attr("d", `M ${baseX} ${topY} V ${junctionY}`);
+
+    // horizontal bar connecting children
+    const leftX = Math.min(...children.map(c => c.x));
+    const rightX = Math.max(...children.map(c => c.x));
+    const barY = children[0].y - 60;
+    g.append("path")
+      .attr("class", colorClass)
+      .attr("d", `M ${leftX} ${barY} H ${rightX}`);
+
+    // vertical from junction to horizontal bar
+    g.append("path")
+      .attr("class", colorClass)
+      .attr("d", `M ${baseX} ${junctionY} V ${barY}`);
+
+    // vertical drops to each child
+    children.forEach(c => {
+      g.append("path")
+        .attr("class", colorClass)
+        .attr("d", `M ${c.x} ${barY} V ${c.y - 32}`);
+    });
+  }
 
   // --- 9) Connectors (organic lines) ---
 
-
   // spouses (red arches above cards)
-spouseIds.forEach(spId=>{
-  const a = nodes.find(n => n.id === subjId);
-  const b = nodes.find(n => n.id === spId);
-  if (!a || !b) return;
-  drawPath(gSpouse, marriageArch(center(a), center(b), 60), "fcl-spouse");
-});
+  spouseIds.forEach(spId=>{
+    const a = nodes.find(n => n.id === subjId);
+    const b = nodes.find(n => n.id === spId);
+    if (!a || !b) return;
+    drawPath(gSpouse, marriageArch(center(a), center(b), 60), "fcl-spouse");
+  });
 
-
-// parents → subject + siblings (blue fan)
-const parentNodes = [fatherId, motherId]
-  .map(id => id ? nodes.find(n => n.id === id) : null)
-  .filter(Boolean);
-
-const sibNodes = [subjId, ...siblingIds]
-  .map(id => id ? nodes.find(n => n.id === id) : null)
-  .filter(Boolean);
-
-if (parentNodes.length && sibNodes.length) {
-  drawFan(gKin, parentNodes, sibNodes, "fcl-kin");
-}
-
-
-
- // subject + spouse(s) → children (blue fan)
-const childNodes = childIds
-  .map(id => id ? nodes.find(n => n.id === id) : null)
-  .filter(Boolean);
-
-if (childNodes.length) {
-  const parents = [nodes.find(n => n.id === subjId)]
-    .concat(spouseIds.map(id => nodes.find(n => n.id === id)))
+  // parents → subject + siblings (blue fan)
+  const parentNodes = [fatherId, motherId]
+    .map(id => id ? nodes.find(n => n.id === id) : null)
     .filter(Boolean);
 
-  drawFan(gKin, parents, childNodes, "fcl-kin");
-}
-  });
+  const sibNodes = [subjId, ...siblingIds]
+    .map(id => id ? nodes.find(n => n.id === id) : null)
+    .filter(Boolean);
+
+  if (parentNodes.length && sibNodes.length) {
+    drawFan(gKin, parentNodes, sibNodes, "fcl-kin");
+  }
+
+  // subject + spouse(s) → children (blue fan)
+  const childNodes = childIds
+    .map(id => id ? nodes.find(n => n.id === id) : null)
+    .filter(Boolean);
+
+  if (childNodes.length) {
+    const parents = [nodes.find(n => n.id === subjId)]
+      .concat(spouseIds.map(id => nodes.find(n => n.id === id)))
+      .filter(Boolean);
+
+    drawFan(gKin, parents, childNodes, "fcl-kin");
+  }
 
   // --- 10) Draw cards (top layer) ---
   nodes.forEach(n=>drawCard(gCards,n,{cardW,cardH}));
