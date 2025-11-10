@@ -136,20 +136,21 @@ const rowH = 180, colW = 260, gapX = 30;
 const cardW = 220, cardH = 100;
 const laneY = (lane) => (lane + 1) * rowH;
 
-// Use container width if available; fallback to 1200 for safety
-const getCenterX = () => (el.clientWidth ? el.clientWidth / 2 : 600);
-let centerX = getCenterX();
+// Define helper for container width; fallback only if truly undefined
+function getCenterX() {
+  const w = el.getBoundingClientRect().width;
+  return w > 0 ? w / 2 : 600;
+}
 
 const lanes = groupBy(nodes, n => n.lane);
 Object.keys(lanes).forEach(k => lanes[k].sort((a, b) => a.order - b.order));
 
 function positionNodes() {
-  centerX = getCenterX();
+  const centerX = getCenterX();
   Object.entries(lanes).forEach(([laneKey, laneNodes]) => {
     const count = laneNodes.length;
     const totalWidth = (count - 1) * (colW + gapX);
     const startX = centerX - totalWidth / 2;
-
     laneNodes.forEach((n, i) => {
       n.x = startX + i * (colW + gapX);
       n.y = laneY(Number(laneKey));
@@ -157,6 +158,8 @@ function positionNodes() {
   });
 }
 
+// Wait until next animation frame to ensure container size is known
+await new Promise(requestAnimationFrame);
 positionNodes(); // initial placement
 
 
