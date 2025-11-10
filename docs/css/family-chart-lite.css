@@ -59,6 +59,7 @@ path[kind="ancestor"] {
 /* Smooth connector styling */
 .fcl-kin { stroke: #1a73e8; stroke-width: 1.6; fill: none; stroke-linecap: round; opacity: .95; }
 .fcl-spouse { stroke: #d93025; stroke-width: 1.6; fill: none; stroke-linecap: round; opacity: .95; }
+.fcl-junction { fill: #1a73e8; opacity: .35; }
 .fcl-connector { stroke-width: 1.2; }
 .fcl-link:hover { fill: #0057b8; cursor: pointer; } /* soft blue hover */
 .fcl-link { cursor: pointer; text-decoration: underline; }
