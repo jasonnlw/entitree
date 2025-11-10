@@ -57,6 +57,13 @@ path[kind="ancestor"] {
   stroke-linejoin: round;
 }
 
+.fcl-plus {
+  fill: #1a73e8;
+  font-weight: bold;
+  user-select: none;
+}
+.fcl-plus:hover { fill: #0b57d0; }
+
 
 /* Smooth connector styling */
 .fcl-kin { stroke: #9DA1A6; stroke-width: 3.5; fill: none; stroke-linecap: round; opacity: .95; }
