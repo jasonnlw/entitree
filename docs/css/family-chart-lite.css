@@ -49,6 +49,13 @@ html, body { height: 100%; margin: 0; background: #fff; }
   background-color: #fff;
 }
 
+.fcl-connector,
+.fcl-marriage,
+path[kind="child"],
+path[kind="ancestor"] {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .fcl-connector { stroke-width: 1.2; }
 .fcl-link:hover { fill: #0057b8; cursor: pointer; } /* soft blue hover */
 .fcl-link { cursor: pointer; text-decoration: underline; }
