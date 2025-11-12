@@ -24,6 +24,31 @@ export async function drawFamilyTree(el, qid, opts = {}) {
     return m ? m[1] : iri;
   };
 
+  // --- Utility: wrap SVG text within a max width ---
+function wrapSvgText(textElem, textStr, maxWidth, lineHeight = 16) {
+  const words = textStr.split(/\s+/).filter(Boolean);
+  const tspan = textElem.append("tspan")
+    .attr("x", textElem.attr("x"))
+    .attr("dy", 0);
+  let line = [];
+  let lineNumber = 0;
+
+  for (const word of words) {
+    line.push(word);
+    tspan.text(line.join(" "));
+    if (tspan.node().getComputedTextLength() > maxWidth && line.length > 1) {
+      line.pop();
+      tspan.text(line.join(" "));
+      line = [word];
+      ++lineNumber;
+      textElem.append("tspan")
+        .attr("x", textElem.attr("x"))
+        .attr("dy", lineHeight)
+        .text(word);
+    }
+  }
+}
+
   // ---------- 1) subject core ----------
   const q1 = `
 SELECT ?person ?personLabel ?dob ?dod ?father ?mother ?spouse ?child ?snarc WHERE {
@@ -412,16 +437,20 @@ function drawCard(g, n, { cardW, cardH }){
   const textX = n.image ? 10 + imgSize + 12 : 14;
   const textY = cardH / 2 - 6;
   const name = grp.append("text")
-    .attr("class", "fcl-name")
-    .attr("x", textX)
-    .attr("y", textY)
-    .text(n.name);
+  .attr("class", "fcl-name")
+  .attr("x", textX)
+  .attr("y", textY);
+
+// wrap label to fit inside available width
+const rightMargin = 10;
+const maxTextWidth = cardW - textX - rightMargin;
+wrapSvgText(name, n.name, maxTextWidth);
 
   if (n.yrs) {
     grp.append("text")
       .attr("class", "fcl-years")
       .attr("x", textX)
-      .attr("y", textY + 18)
+      .attr("y", textY + 20)
       .text(n.yrs);
   }
 
