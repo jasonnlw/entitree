@@ -415,10 +415,18 @@ function mountSvg(el){
 function drawCard(g, n, { cardW, cardH }){
   const grp = g.append("g").attr("transform", `translate(${n.x - cardW/2}, ${n.y - cardH/2})`);
 
-    const fillColor =
-    n.gender?.toLowerCase().includes("female") ? "#ffd6e7" :   // light pink
-    n.gender?.toLowerCase().includes("male")   ? "#cce5ff" :   // light blue
-    "#f5f5f5";                                                 // neutral fallback
+  const g = (n.gender || "").toLowerCase();
+
+const fillColor =
+  // English + Welsh feminine forms
+  (g.includes("female") || g.includes("benyw") || g.includes("ferch"))
+    ? "#ffd6e7"
+  // English + Welsh masculine forms
+  : (g.includes("male") || g.includes("gwryw") || g.includes("bachgen"))
+    ? "#cce5ff"
+  // Fallback neutral
+  : "#f5f5f5";
+
 
   // --- Card background ---
   grp.append("rect")
