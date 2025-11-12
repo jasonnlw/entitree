@@ -3,6 +3,35 @@
 // Visual-only tweaks: subtle upward 30px curve below junctions + shorter upper stems.
 // Marriage arches unchanged. Connector logic ring‑fenced.
 
+// === Utility: wrap SVG text within a max width (top-level so drawCard can use it) ===
+function wrapSvgText(textSel, textStr, maxWidth, lineHeight = 16) {
+  // Ensure we start clean (no leftover tspans on re-render)
+  textSel.selectAll("tspan").remove();
+
+  const words = String(textStr || "").split(/\s+/).filter(Boolean);
+  if (!words.length) return;
+
+  let line = [];
+  let tspan = textSel.append("tspan")
+    .attr("x", textSel.attr("x"))
+    .attr("dy", 0);
+
+  for (const word of words) {
+    line.push(word);
+    tspan.text(line.join(" "));
+    // If the line is too long, move the last word to a new tspan
+    if (tspan.node().getComputedTextLength() > maxWidth && line.length > 1) {
+      line.pop();
+      tspan.text(line.join(" "));
+      line = [word];
+      tspan = textSel.append("tspan")
+        .attr("x", textSel.attr("x"))
+        .attr("dy", lineHeight)
+        .text(word);
+    }
+  }
+}
+
 export async function drawFamilyTree(el, qid, opts = {}) {
   const langPref = (opts.lang === "cy" ? "cy,en" : "en,cy");
   const endpoint = "https://query.wikidata.org/sparql";
@@ -23,31 +52,6 @@ export async function drawFamilyTree(el, qid, opts = {}) {
     const m = /entity\/(Q\d+)/.exec(iri) || /www\.wikidata\.org\/(Q\d+)/.exec(iri);
     return m ? m[1] : iri;
   };
-
-  // --- Utility: wrap SVG text within a max width ---
-function wrapSvgText(textElem, textStr, maxWidth, lineHeight = 16) {
-  const words = textStr.split(/\s+/).filter(Boolean);
-  const tspan = textElem.append("tspan")
-    .attr("x", textElem.attr("x"))
-    .attr("dy", 0);
-  let line = [];
-  let lineNumber = 0;
-
-  for (const word of words) {
-    line.push(word);
-    tspan.text(line.join(" "));
-    if (tspan.node().getComputedTextLength() > maxWidth && line.length > 1) {
-      line.pop();
-      tspan.text(line.join(" "));
-      line = [word];
-      ++lineNumber;
-      textElem.append("tspan")
-        .attr("x", textElem.attr("x"))
-        .attr("dy", lineHeight)
-        .text(word);
-    }
-  }
-}
 
   // ---------- 1) subject core ----------
   const q1 = `
@@ -434,25 +438,41 @@ function drawCard(g, n, { cardW, cardH }){
       .attr("width",imgSize).attr("height",imgSize)
       .attr("preserveAspectRatio","xMidYTop slice").attr("clip-path","inset(0 round 8px)");
   }
-  const textX = n.image ? 10 + imgSize + 12 : 14;
-  const textY = cardH / 2 - 6;
-  const name = grp.append("text")
+
+// --- Text layout ---
+const textX = n.image ? 10 + imgSize + 12 : 14;
+const textY = cardH / 2 - 6;
+
+// Name (multi-line via wrap)
+const name = grp.append("text")
   .attr("class", "fcl-name")
   .attr("x", textX)
   .attr("y", textY);
 
-// wrap label to fit inside available width
 const rightMargin = 10;
 const maxTextWidth = cardW - textX - rightMargin;
 wrapSvgText(name, n.name, maxTextWidth);
 
-  if (n.yrs) {
-    grp.append("text")
-      .attr("class", "fcl-years")
-      .attr("x", textX)
-      .attr("y", textY + 20)
-      .text(n.yrs);
-  }
+// Compute the height of the wrapped name to place years safely below it
+let yearsY = textY + 18;
+try {
+  const nameBox = name.node().getBBox();
+  // If multiple lines, push the years label under the rendered name block
+  yearsY = Math.max(yearsY, nameBox.y + nameBox.height + 6);
+} catch (e) {
+  // Fallback to default if getBBox is not available yet
+  yearsY = textY + 22;
+}
+
+// Years (if present), positioned under wrapped name
+if (n.yrs) {
+  grp.append("text")
+    .attr("class", "fcl-years")
+    .attr("x", textX)
+    .attr("y", yearsY)
+    .text(n.yrs);
+}
+  
 
   if (n.snarc) {
     name
