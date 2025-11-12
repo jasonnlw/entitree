@@ -478,7 +478,7 @@ if (lineCount >= 3) {
 }
 
 // 4️⃣ Compute vertical placement for years below wrapped text with safe padding
-let yearsY = nameBox.y + nameBox.height + 8; // 8px extra gap
+let yearsY = nameBox.y + nameBox.height + 12; // 8px extra gap
 
 // Years (if present), positioned under wrapped name
 if (n.yrs) {
