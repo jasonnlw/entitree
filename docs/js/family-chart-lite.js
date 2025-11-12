@@ -440,6 +440,8 @@ function drawCard(g, n, { cardW, cardH }){
   }
 
 // --- Text layout ---
+
+// --- Text layout ---
 const textX = n.image ? 10 + imgSize + 12 : 14;
 const textY = cardH / 2 - 6;
 
@@ -451,18 +453,42 @@ const name = grp.append("text")
 
 const rightMargin = 10;
 const maxTextWidth = cardW - textX - rightMargin;
+
+// 1️⃣ Wrap the name text
 wrapSvgText(name, n.name, maxTextWidth);
 
-// Compute the height of the wrapped name to place years safely below it
-let yearsY = textY + 18;
+// 2️⃣ Measure wrapped height
+let nameBox, lineCount = 1;
 try {
-  const nameBox = name.node().getBBox();
-  // If multiple lines, push the years label under the rendered name block
-  yearsY = Math.max(yearsY, nameBox.y + nameBox.height + 6);
+  nameBox = name.node().getBBox();
+  lineCount = name.selectAll("tspan").size();
 } catch (e) {
-  // Fallback to default if getBBox is not available yet
-  yearsY = textY + 22;
+  nameBox = { y: textY, height: 0 };
 }
+
+// 3️⃣ Reduce font size for very long labels (3+ lines)
+if (lineCount >= 3) {
+  const smallerSize = 13;
+  name.style("font-size", `${smallerSize}px`);
+  // Re-wrap text at smaller size to fit better
+  wrapSvgText(name, n.name, maxTextWidth);
+  try {
+    nameBox = name.node().getBBox();
+  } catch (e) {}
+}
+
+// 4️⃣ Compute vertical placement for years below wrapped text with safe padding
+let yearsY = nameBox.y + nameBox.height + 8; // 8px extra gap
+
+// Years (if present), positioned under wrapped name
+if (n.yrs) {
+  grp.append("text")
+    .attr("class", "fcl-years")
+    .attr("x", textX)
+    .attr("y", yearsY)
+    .text(n.yrs);
+}
+
 
 // Years (if present), positioned under wrapped name
 if (n.yrs) {
