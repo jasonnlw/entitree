@@ -567,6 +567,8 @@ function autofit(svg, nodes, { pad = 40 } = {}) {
 
   // Dimensions of actual SVG container (iframe-defined)
   const svgNode = svg.node();
+  svgNode.style.width = "100%";
+svgNode.style.height = "100%";
   const { width, height } = svgNode.getBoundingClientRect();
 
  // --- FIXED INITIAL SCALE (remove duplicate isMobile) ---
