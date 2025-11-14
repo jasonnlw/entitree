@@ -550,64 +550,61 @@ function commonsThumb(url, width=200){
   return url;
 }
 
+// ============================================================
+//                SUBJECT-CENTERED FIXED-ZOOM AUTOFIT
+// ============================================================
 function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
   if (!nodes.length) return;
 
-  // Find the subject node
+  // --- 1. Identify subject node -------------------------------------
   const subject = nodes.find(n => n.id === subjId) || nodes[0];
 
-  // Compute bounding box of ALL nodes (needed for viewBox, but not centering)
-  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
-  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
-  const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+  // --- 2. Compute full bounding box (needed only for viewBox) -------
+  const xs = nodes.map(n => n.x), 
+        ys = nodes.map(n => n.y);
 
-  // Tree width/height
+  const minX = Math.min(...xs) - pad;
+  const maxX = Math.max(...xs) + pad;
+  const minY = Math.min(...ys) - pad;
+  const maxY = Math.max(...ys) + pad;
+
   const w = maxX - minX;
   const h = maxY - minY;
 
-  // Apply viewBox so SVG knows its coordinate space
+  // Apply viewBox so the SVG knows its coordinate extents
   svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
 
-  // Ensure SVG has correct dimensions before measuring
+  // --- 3. Ensure SVG has layout before measurement -------------------
   const svgNode = svg.node();
   svgNode.style.width = "100%";
   svgNode.style.height = "100%";
 
   const { width, height } = svgNode.getBoundingClientRect();
 
-  // Detect device
+  // --- 4. FIXED INITIAL ZOOM (no tree-size scaling at all) ----------
+  // Adjust these two numbers to tune zoom level:
+  const MOBILE_ZOOM   = 1.25;   // mobile: closer in
+  const DESKTOP_ZOOM  = 0.85;   // desktop: wider framing
+
   const isMobile = window.innerWidth < 600;
+  let scale = isMobile ? MOBILE_ZOOM : DESKTOP_ZOOM;
 
-  // --- SCALE BASED ONLY ON SUBJECT CARD WIDTH ---
-  // All your cards are consistent width
-  const SUBJECT_CARD_WIDTH = 180;   // CHANGE IF YOUR CARD WIDTH DIFFERENT
+  // --- 5. Center view exactly on subject node ------------------------
+  const cx = width  / 2 - subject.x * scale;
+  const cy = height / 2 - subject.y * scale;
 
-  // Subject should take 60% of viewport width on mobile, 40% on desktop
-  const targetPixels = isMobile ? width * 0.60 : width * 0.40;
+  const initial = d3.zoomIdentity
+    .translate(cx, cy)
+    .scale(scale);
 
-  let scale = targetPixels / SUBJECT_CARD_WIDTH;
-
-  // Clamp scale slightly so it doesn't go crazy on tiny widths
-  scale = Math.max(0.6, Math.min(scale, 2.5));
-
-  // --- CENTER ENTIRE VIEW ON SUBJECT NODE ---
-  // Calculate where subject sits in SVG space
-  const sx = subject.x;
-  const sy = subject.y;
-
-  // Translate so subject is centered
-  const cx = width / 2 - sx * scale;
-  const cy = height / 2 - sy * scale;
-
-  const initial = d3.zoomIdentity.translate(cx, cy).scale(scale);
-
-  // Zoom limits
+  // --- 6. Pan / Zoom behaviour (unchanged except for max zoom) -------
   const maxZoom = isMobile ? 10 : 5;
 
   const zoom = d3.zoom()
     .scaleExtent([0.2, maxZoom])
     .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
 
+  // --- 7. Apply initial transform & enable zoom -----------------------
   svg.call(zoom.transform, initial);
   svg.call(zoom);
 }
