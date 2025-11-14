@@ -553,37 +553,45 @@ function commonsThumb(url, width=200){
 function autofit(svg, nodes, { pad = 40 } = {}) {
   if (!nodes.length) return;
 
+  // --- Compute bounding box of all nodes ---
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
   const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
-  const w = Math.max(800, maxX - minX), h = Math.max(600, maxY - minY);
 
+  // Width/height of the rendered tree
+  const w = maxX - minX;
+  const h = maxY - minY;
+
+  // Apply viewBox so SVG knows its drawing extents
   svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
 
+  // Dimensions of actual SVG container (iframe-defined)
   const svgNode = svg.node();
   const { width, height } = svgNode.getBoundingClientRect();
 
-// 1️⃣ Fixed initial scale (no Math.min — avoids tiny trees)
-const isMobile = window.innerWidth < 600;
+  // --- FIXED INITIAL SCALE (stable and predictable) ---
+  const isMobile = window.innerWidth < 600;
 
-// Desktop loads zoomed-in enough to be readable
-// Mobile loads at ~60% width (your requirement)
-let scale = isMobile ? 1.1 : 0.8;
+  // Desktop: slightly zoomed-in but not too much
+  // Mobile: enough so one card is ~60% of screen width
+  let scale = isMobile ? 1.1 : 0.8;
 
-
-  // 2️⃣ Center-x and center-y alignment
+  // --- PERFECT CENTERING OF TREE ---
   const cx = (width - w * scale) / 2;
   const cy = (height - h * scale) / 2;
-  const initial = d3.zoomIdentity.translate(cx, cy).scale(scale);
 
-  // 3️⃣ Device-aware zoom limits
-  const isMobile = window.innerWidth < 768;
+  const initial = d3.zoomIdentity
+    .translate(cx, cy)
+    .scale(scale);
+
+  // --- Device-aware zoom limits ---
   const maxZoom = isMobile ? 10 : 5;
 
   const zoom = d3.zoom()
     .scaleExtent([0.2, maxZoom])
     .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
 
+  // Apply the initial transform & activate zoom
   svg.call(zoom.transform, initial);
   svg.call(zoom);
 }
