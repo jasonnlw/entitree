@@ -41,6 +41,21 @@
       el.innerHTML = "<div style='padding:1rem'>Missing ?item=Qxxxx</div>";
     } else {
       drawFamilyTree(el, qid, { lang });
+
+      // --- Auto-height iframe support ---
+function sendHeight() {
+  const h = document.body.scrollHeight;
+  window.parent.postMessage({ entitreeHeight: h }, "*");
+}
+
+window.addEventListener("load", sendHeight);
+window.addEventListener("resize", sendHeight);
+
+// Also re-check height periodically (trees may grow after render)
+setTimeout(sendHeight, 250);
+setTimeout(sendHeight, 500);
+setTimeout(sendHeight, 1000);
+
     }
   </script>
 </body>
