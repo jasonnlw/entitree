@@ -583,8 +583,8 @@ function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
   const { width, height } = svgNode.getBoundingClientRect();
 
   // --- 4. FIXED INITIAL ZOOM LEVELS ---------------------------------
-  const MOBILE_ZOOM   = 5.25;  // tweak as desired
-  const DESKTOP_ZOOM  = 3.10;  // tweak as desired
+  const MOBILE_ZOOM   = 2.25;  // tweak as desired
+  const DESKTOP_ZOOM  = 1.10;  // tweak as desired
 
   const isMobile = window.innerWidth < 600;
   let scale = isMobile ? MOBILE_ZOOM : DESKTOP_ZOOM;
