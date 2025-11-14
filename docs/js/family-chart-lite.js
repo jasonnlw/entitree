@@ -555,8 +555,6 @@ function commonsThumb(url, width=200){
 // ============================================================
 function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
 
-  console.log("Initial scale applied:", scale);
-
   if (!nodes.length) return;
 
   // --- 1. Identify subject node -------------------------------------
@@ -584,13 +582,15 @@ function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
 
   const { width, height } = svgNode.getBoundingClientRect();
 
-  // --- 4. FIXED INITIAL ZOOM (no tree-size scaling at all) ----------
-  // Adjust these two numbers to tune zoom level:
-  const MOBILE_ZOOM   = 5.25;   // mobile: closer in
-  const DESKTOP_ZOOM  = 3.10;   // desktop: wider framing
+  // --- 4. FIXED INITIAL ZOOM LEVELS ---------------------------------
+  const MOBILE_ZOOM   = 5.25;  // tweak as desired
+  const DESKTOP_ZOOM  = 3.10;  // tweak as desired
 
   const isMobile = window.innerWidth < 600;
   let scale = isMobile ? MOBILE_ZOOM : DESKTOP_ZOOM;
+
+  // Debug (now safe)
+  console.log("Initial zoom scale:", scale);
 
   // --- 5. Center view exactly on subject node ------------------------
   const cx = width  / 2 - subject.x * scale;
@@ -600,7 +600,7 @@ function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
     .translate(cx, cy)
     .scale(scale);
 
-  // --- 6. Pan / Zoom behaviour (unchanged except for max zoom) -------
+  // --- 6. Pan / Zoom behaviour ---------------------------------------
   const maxZoom = isMobile ? 10 : 5;
 
   const zoom = d3.zoom()
@@ -611,6 +611,7 @@ function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
   svg.call(zoom.transform, initial);
   svg.call(zoom);
 }
+
 
 
 // d3 check
