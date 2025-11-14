@@ -550,49 +550,39 @@ function commonsThumb(url, width=200){
   return url;
 }
 
+
 // ============================================================
-//                SUBJECT-CENTERED FIXED-ZOOM AUTOFIT
+//            SUBJECT-CENTERED FIXED-ZOOM AUTOFIT (FINAL)
 // ============================================================
 function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
-
   if (!nodes.length) return;
 
   // --- 1. Identify subject node -------------------------------------
   const subject = nodes.find(n => n.id === subjId) || nodes[0];
 
-  // --- 2. Compute full bounding box (needed only for viewBox) -------
-  const xs = nodes.map(n => n.x), 
-        ys = nodes.map(n => n.y);
-
-  const minX = Math.min(...xs) - pad;
-  const maxX = Math.max(...xs) + pad;
-  const minY = Math.min(...ys) - pad;
-  const maxY = Math.max(...ys) + pad;
-
-  const w = maxX - minX;
-  const h = maxY - minY;
-
-  // Apply viewBox so the SVG knows its coordinate extents
-  svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
-
-  // --- 3. Ensure SVG has layout before measurement -------------------
+  // --- 2. Ensure SVG has layout before measurement -------------------
   const svgNode = svg.node();
-  svgNode.style.width = "100%";
+  svgNode.style.width  = "100%";
   svgNode.style.height = "100%";
 
   const { width, height } = svgNode.getBoundingClientRect();
 
-  // --- 4. FIXED INITIAL ZOOM LEVELS ---------------------------------
-  const MOBILE_ZOOM   = 2.25;  // tweak as desired
-  const DESKTOP_ZOOM  = 1.10;  // tweak as desired
+  // IMPORTANT: use a stable pixel-based viewBox so zoom
+  // is NOT influenced by tree width/height.
+  // This decouples zoom from the overall size of the tree.
+  svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+  // --- 3. FIXED INITIAL ZOOM LEVELS (tree-size independent) ---------
+  // Tweak these to taste:
+  const MOBILE_ZOOM   = 2.25;  // closer on mobile
+  const DESKTOP_ZOOM  = 1.10;  // comfortable on desktop
 
   const isMobile = window.innerWidth < 600;
   let scale = isMobile ? MOBILE_ZOOM : DESKTOP_ZOOM;
 
-  // Debug (now safe)
-  console.log("Initial zoom scale:", scale);
+  console.log("Initial zoom scale (fixed):", scale, "isMobile:", isMobile);
 
-  // --- 5. Center view exactly on subject node ------------------------
+  // --- 4. Center view exactly on subject node ------------------------
   const cx = width  / 2 - subject.x * scale;
   const cy = height / 2 - subject.y * scale;
 
@@ -600,14 +590,14 @@ function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
     .translate(cx, cy)
     .scale(scale);
 
-  // --- 6. Pan / Zoom behaviour ---------------------------------------
+  // --- 5. Pan / Zoom behaviour ---------------------------------------
   const maxZoom = isMobile ? 10 : 5;
 
   const zoom = d3.zoom()
     .scaleExtent([0.2, maxZoom])
     .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
 
-  // --- 7. Apply initial transform & enable zoom -----------------------
+  // --- 6. Apply initial transform & enable zoom -----------------------
   svg.call(zoom.transform, initial);
   svg.call(zoom);
 }
