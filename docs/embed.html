@@ -6,10 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="css/family-chart-lite.css" />
   <style>
-    /* Ensure full-viewport height in iframe embeds */
-    html,body { height:100%; }
-    #tree { height:100vh; }
-  </style>
+  /* Remove internal scrollbars in iframe */
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden; /* KEY: removes iframe scrollbars */
+  }
+
+  /* The SVG/D3 container should fill the iframe */
+  #tree {
+    width: 100%;
+    height: 100vh; /* Full viewport height inside iframe */
+  }
+</style>
+
 </head>
 <body>
   <div id="tree"></div>
