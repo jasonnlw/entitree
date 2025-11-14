@@ -564,8 +564,14 @@ function autofit(svg, nodes, { pad = 40 } = {}) {
   const { width, height } = svgNode.getBoundingClientRect();
 
   // 1️⃣ Initial scale boost
-  const ZOOM_START = 1.25;  // change this for more/less zoom
-  const scale = Math.min(width / w, height / h) * ZOOM_START;
+  const ZOOM_START = 1.25; 
+let scale = Math.min(width / w, height / h) * ZOOM_START;
+
+// ⭐ OPTIONAL MOBILE ZOOM BOOST: ensure tree fills at least 60% of mobile viewport width
+const viewportWidth = window.innerWidth;
+if (viewportWidth < 600) {
+    scale = Math.max(scale, (viewportWidth * 0.6) / w);
+}
 
   // 2️⃣ Center-x and center-y alignment
   const cx = (width - w * scale) / 2;
