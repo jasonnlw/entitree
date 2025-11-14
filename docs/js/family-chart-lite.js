@@ -550,20 +550,40 @@ function commonsThumb(url, width=200){
   return url;
 }
 
-function autofit(svg, nodes, { pad = 40 } = {}){
+function autofit(svg, nodes, { pad = 40 } = {}) {
   if (!nodes.length) return;
+
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
   const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
   const w = Math.max(800, maxX - minX), h = Math.max(600, maxY - minY);
+
   svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
+
   const svgNode = svg.node();
   const { width, height } = svgNode.getBoundingClientRect();
-  const scale = Math.min(width / w, height / h);
-  const tx = (width - w * scale) / 2, ty = (height - h * scale) / 2;
-  const initial = d3.zoomIdentity.translate(tx, ty).scale(scale);
-  svg.call(d3.zoom().transform, initial);
+
+  // 1️⃣ Initial scale boost
+  const ZOOM_START = 1.25;  // change this for more/less zoom
+  const scale = Math.min(width / w, height / h) * ZOOM_START;
+
+  // 2️⃣ Center-x and center-y alignment
+  const cx = (width - w * scale) / 2;
+  const cy = (height - h * scale) / 2;
+  const initial = d3.zoomIdentity.translate(cx, cy).scale(scale);
+
+  // 3️⃣ Device-aware zoom limits
+  const isMobile = window.innerWidth < 768;
+  const maxZoom = isMobile ? 10 : 5;
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.2, maxZoom])
+    .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
+
+  svg.call(zoom.transform, initial);
+  svg.call(zoom);
 }
+
 
 // d3 check
 if (typeof window !== "undefined" && !window.d3) {
