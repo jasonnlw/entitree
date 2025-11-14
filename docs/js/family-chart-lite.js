@@ -583,8 +583,8 @@ function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
 
   // --- 4. FIXED INITIAL ZOOM (no tree-size scaling at all) ----------
   // Adjust these two numbers to tune zoom level:
-  const MOBILE_ZOOM   = 1.25;   // mobile: closer in
-  const DESKTOP_ZOOM  = 0.85;   // desktop: wider framing
+  const MOBILE_ZOOM   = 5.25;   // mobile: closer in
+  const DESKTOP_ZOOM  = 3.10;   // desktop: wider framing
 
   const isMobile = window.innerWidth < 600;
   let scale = isMobile ? MOBILE_ZOOM : DESKTOP_ZOOM;
