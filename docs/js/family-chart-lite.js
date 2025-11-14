@@ -554,6 +554,9 @@ function commonsThumb(url, width=200){
 //                SUBJECT-CENTERED FIXED-ZOOM AUTOFIT
 // ============================================================
 function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
+
+  console.log("Initial scale applied:", scale);
+
   if (!nodes.length) return;
 
   // --- 1. Identify subject node -------------------------------------
