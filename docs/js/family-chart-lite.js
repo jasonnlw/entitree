@@ -569,36 +569,24 @@ function autofit(svg, nodes, { pad = 40 } = {}) {
   const svgNode = svg.node();
   const { width, height } = svgNode.getBoundingClientRect();
 
-  // --- FIXED INITIAL SCALE (stable and predictable) ---
-  const isMobile = window.innerWidth < 600;
-
-  // Desktop: slightly zoomed-in but not too much
-  // Mobile: enough so one card is ~60% of screen width
-  let scale = isMobile ? 1.1 : 0.8;
-
-  // --- PERFECT CENTERING OF TREE ---
-  const cx = (width - w * scale) / 2;
-  const cy = (height - h * scale) / 2;
-
-  const initial = d3.zoomIdentity
-    .translate(cx, cy)
-    .scale(scale);
-
-  // --- Device-aware zoom limits ---
+ // --- FIXED INITIAL SCALE (remove duplicate isMobile) ---
 const isMobile = window.innerWidth < 600;
+let scale = isMobile ? 1.1 : 0.8;
 
-// Mobile: allow deeper zoom (trees are smaller, people pinch-zoom more)
-// Desktop: lower maximum zoom
+// --- CENTERING ---
+const cx = (width - w * scale) / 2;
+const cy = (height - h * scale) / 2;
+const initial = d3.zoomIdentity.translate(cx, cy).scale(scale);
+
+// --- DEVICE-AWARE ZOOM LIMITS (do NOT redeclare isMobile here) ---
 const maxZoom = isMobile ? 10 : 5;
 
 const zoom = d3.zoom()
   .scaleExtent([0.2, maxZoom])
   .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
 
-
-  // Apply the initial transform & activate zoom
-  svg.call(zoom.transform, initial);
-  svg.call(zoom);
+svg.call(zoom.transform, initial);
+svg.call(zoom);
 }
 
 
