@@ -585,11 +585,16 @@ function autofit(svg, nodes, { pad = 40 } = {}) {
     .scale(scale);
 
   // --- Device-aware zoom limits ---
-  const maxZoom = isMobile ? 10 : 5;
+const isMobile = window.innerWidth < 600;
 
-  const zoom = d3.zoom()
-    .scaleExtent([0.2, maxZoom])
-    .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
+// Mobile: allow deeper zoom (trees are smaller, people pinch-zoom more)
+// Desktop: lower maximum zoom
+const maxZoom = isMobile ? 10 : 5;
+
+const zoom = d3.zoom()
+  .scaleExtent([0.2, maxZoom])
+  .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
+
 
   // Apply the initial transform & activate zoom
   svg.call(zoom.transform, initial);
