@@ -42,6 +42,36 @@
     } else {
       drawFamilyTree(el, qid, { lang });
 
+      // --- Reliable auto-height system for iframe embedding ---
+function sendTreeHeight() {
+  const tree = document.getElementById("tree");
+  if (!tree) return;
+
+  // Measure the actual rendered height of the SVG content
+  const svg = tree.querySelector("svg");
+  if (!svg) return;
+
+  // ScrollHeight or getBBox fallback
+  const contentHeight = Math.max(
+    tree.scrollHeight,
+    svg.getBoundingClientRect().height,
+    svg.viewBox.baseVal.height
+  );
+
+  window.parent.postMessage({ entitreeHeight: contentHeight }, "*");
+}
+
+// Wait for layout stabilization
+const stabilizationDelays = [200, 400, 800, 1200, 2000];
+
+stabilizationDelays.forEach(delay => {
+  setTimeout(sendTreeHeight, delay);
+});
+
+// Recompute on zoom/pan
+window.addEventListener("resize", sendTreeHeight);
+
+
       // --- Auto-height iframe support ---
 function sendHeight() {
   const h = document.body.scrollHeight;
