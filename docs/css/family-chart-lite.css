@@ -11,7 +11,7 @@
 }
 
 html, body { height: 100%; margin: 0; background: #fff; }
-#tree { width: 100%; height: 100vh; overflow: auto; position: relative; }
+#tree { width: 100%; height: 100vh; overflow: hidden; position: relative; }
 
 .fcl-svg { width: 100%; height: 100%; }
 
@@ -88,5 +88,4 @@ path[kind="ancestor"] {
   fill: #1a73e8;
   opacity: 1;
 }
-
 
