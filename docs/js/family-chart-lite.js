@@ -357,7 +357,7 @@ console.table(nodes.map(n => ({
 })));
 
   // ---------- 11) fit view ----------
-  autofit(svg, nodes, { pad: 60 });
+autofit(svg, nodes, { pad: 60, subjId: qid });
 
   // --- Responsive centering on resize ---
 window.addEventListener("resize", () => {
