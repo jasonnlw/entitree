@@ -550,45 +550,66 @@ function commonsThumb(url, width=200){
   return url;
 }
 
-function autofit(svg, nodes, { pad = 40 } = {}) {
+function autofit(svg, nodes, { pad = 40, subjId = null } = {}) {
   if (!nodes.length) return;
 
-  // --- Compute bounding box of all nodes ---
+  // Find the subject node
+  const subject = nodes.find(n => n.id === subjId) || nodes[0];
+
+  // Compute bounding box of ALL nodes (needed for viewBox, but not centering)
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
   const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
 
-  // Width/height of the rendered tree
+  // Tree width/height
   const w = maxX - minX;
   const h = maxY - minY;
 
-  // Apply viewBox so SVG knows its drawing extents
+  // Apply viewBox so SVG knows its coordinate space
   svg.attr("viewBox", `${minX} ${minY} ${w} ${h}`);
 
-  // Dimensions of actual SVG container (iframe-defined)
+  // Ensure SVG has correct dimensions before measuring
   const svgNode = svg.node();
   svgNode.style.width = "100%";
-svgNode.style.height = "100%";
+  svgNode.style.height = "100%";
+
   const { width, height } = svgNode.getBoundingClientRect();
 
- // --- FIXED INITIAL SCALE (remove duplicate isMobile) ---
-const isMobile = window.innerWidth < 600;
-let scale = isMobile ? 1.1 : 0.8;
+  // Detect device
+  const isMobile = window.innerWidth < 600;
 
-// --- CENTERING ---
-const cx = (width - w * scale) / 2;
-const cy = (height - h * scale) / 2;
-const initial = d3.zoomIdentity.translate(cx, cy).scale(scale);
+  // --- SCALE BASED ONLY ON SUBJECT CARD WIDTH ---
+  // All your cards are consistent width
+  const SUBJECT_CARD_WIDTH = 180;   // CHANGE IF YOUR CARD WIDTH DIFFERENT
 
-// --- DEVICE-AWARE ZOOM LIMITS (do NOT redeclare isMobile here) ---
-const maxZoom = isMobile ? 10 : 5;
+  // Subject should take 60% of viewport width on mobile, 40% on desktop
+  const targetPixels = isMobile ? width * 0.60 : width * 0.40;
 
-const zoom = d3.zoom()
-  .scaleExtent([0.2, maxZoom])
-  .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
+  let scale = targetPixels / SUBJECT_CARD_WIDTH;
 
-svg.call(zoom.transform, initial);
-svg.call(zoom);
+  // Clamp scale slightly so it doesn't go crazy on tiny widths
+  scale = Math.max(0.6, Math.min(scale, 2.5));
+
+  // --- CENTER ENTIRE VIEW ON SUBJECT NODE ---
+  // Calculate where subject sits in SVG space
+  const sx = subject.x;
+  const sy = subject.y;
+
+  // Translate so subject is centered
+  const cx = width / 2 - sx * scale;
+  const cy = height / 2 - sy * scale;
+
+  const initial = d3.zoomIdentity.translate(cx, cy).scale(scale);
+
+  // Zoom limits
+  const maxZoom = isMobile ? 10 : 5;
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.2, maxZoom])
+    .on("zoom", (e) => svg.select("g").attr("transform", e.transform));
+
+  svg.call(zoom.transform, initial);
+  svg.call(zoom);
 }
 
 
