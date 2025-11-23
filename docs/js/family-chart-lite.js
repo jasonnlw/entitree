@@ -429,7 +429,7 @@ const isMale =
   genderStr.includes("bachgen") || // boy
   genderStr.includes("dyn");       // man
 
-const fillColor = isFemale ? "#ff9651" : (isMale ? "#62caca" : "#f5f5f5");
+const fillColor = isFemale ? "#ffdf73" : (isMale ? "#62caca" : "#f5f5f5");
 
   // --- Card background ---
   grp.append("rect")
